@@ -7,6 +7,15 @@ packages:
 # approve all of them here. Each adapter can override this in its
 # own pnpm-workspace.yaml if it has a different dep profile.
 allowBuilds:
+  better-sqlite3: true
   esbuild: true
   protobufjs: true
   sharp: true
+
+# pnpm 11 supply-chain policy rejects packages published within
+# the minimum release age cutoff (default 24h). Disable for this
+# internal monorepo: every adapter depends on @n3ary/gtfs-spec
+# (also internal, recently published), and we own the publish
+# pipeline — no supply-chain attack surface from recent publishes.
+# (Minutes; 0 = no cutoff.)
+minimumReleaseAge: 0

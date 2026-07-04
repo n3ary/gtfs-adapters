@@ -29,11 +29,13 @@
   },
   "packageManager": "pnpm@11.5.2",
   "dependencies": {
-    "@n3ary/gtfs-spec": "^0.3.1",
+    "@n3ary/gtfs-spec": "^0.3.2",
     "archiver": "^8.0.0",
+    "better-sqlite3": "^12.11.1",
     "gtfs-realtime-bindings": "^1.1.1"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.0",
     "eslint": "^10.6.0",
     "protobufjs": "^7.4.0",

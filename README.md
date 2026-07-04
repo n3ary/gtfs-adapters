@@ -26,20 +26,32 @@ gtfs-adapters/
 ├── adapters/
 │   └── cluj-napoca/           # @n3ary/gtfs-adapter-cluj-napoca
 │       ├── src/
-│       │   ├── static/        # 3-source reconcile → GTFS zip
+│       │   ├── static/        # route-color fixup + StaticExtension (per-feed sqlite extras)
 │       │   ├── rt/            # RT quirks + runtime registration
-│       │   ├── shared/        # color resolution, networks, _neary_config
-│       │   └── index.ts
-│       └── ...
+│       │   ├── assemble/      # 3-source reconcile → GTFS zip
+│       │   ├── sources/       # Tranzy + Transitous + CTP CSV fetchers
+│       │   ├── lib/           # generic helpers (timing, stop-id, polyline)
+│       │   └── cli.ts         # the daily CLI for cluj
+│       └── tests/
+│           ├── static/        # StaticExtension contract tests
+│           ├── rt/            # RT quirk tests
+│           └── ...
 └── ...
 ```
 
-Each adapter exports two surfaces:
+Each adapter exports per-feed surfaces:
 
-- **`static.ts`** — produces the GTFS `.zip` (output of the static pipeline).
-- **`rt.ts`** — registers per-feed RT quirks with the generic proxy.
+- **`static/`** — `clujStaticExtension(feedConfig): StaticExtension` for the generic `gtfs-static` pipeline; `route-colors.ts` for the algorithmic core; `applyClujStaticPostLoad(db, ctx)` for direct DB hooks. (See [gtfs-adapters#1](https://github.com/n3ary/gtfs-adapters/issues/1) — currently being split out of `n3ary/gtfs/packages/gtfs-static/`.)
+- **`rt/`** — `registerRtQuirks(register)` hook for the generic proxy.
+- **`assemble/` + `sources/`** — the cluj-specific reconcile-then-zip pipeline (runs as part of the cluj adapter's own daily cron, NOT consumed by `@n3ary/gtfs-static`).
 
-The `static` side runs as part of the data publishing pipeline. The `rt` side deploys as a per-adapter Hetzner service (or as a plugin loaded by the generic `gtfs-rt` proxy at startup).
+The static-side `StaticExtension` is defined in `@gtfs/static/src/lib/extension.ts` and duplicated locally in the adapter (TS is structural). Long-term: lift into `@n3ary/gtfs-spec`.
+
+## Why this repo exists
+
+Before the split, the cluj adapter's per-feed knowledge (RT quirk, route-color fixup, `_neary_config`, network taxonomy) lived across three repos with no canonical source. After the split, `gtfs-adapters/adapters/cluj-napoca/` owns it all.
+
+Tracks [n3ary/gtfs#67](https://github.com/n3ary/gtfs/issues/67). RT-side extraction is done (PR #2 in this repo). Static-side is landing via [#1](https://github.com/n3ary/gtfs-adapters/issues/1).
 
 ## Cross-references
 
