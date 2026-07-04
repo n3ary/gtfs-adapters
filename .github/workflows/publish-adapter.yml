@@ -122,7 +122,11 @@ jobs:
           } > "$HOME/.npmrc"
           cd adapters/cluj-napoca
           # --access restricted: this package lives in the @n3ary
-          # org-scoped registry. The default visibility is private;
-          # we'd flip to public only if we want it on npmjs.
-          npm publish --provenance --access restricted
+          # org-scoped registry at GH Packages with private visibility
+          # (matches @n3ary/gtfs-spec's current visibility). Drop
+          # --provenance because npm refuses to attach an SLSA
+          # attestation to restricted-visibility packages; the
+          # supply-chain context we care about is captured by tag +
+          # workflow provenance instead.
+          npm publish --access restricted
         continue-on-error: false
