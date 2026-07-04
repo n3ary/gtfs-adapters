@@ -57,6 +57,8 @@ jobs:
         # minimumReleaseAge: 0 because every adapter depends on
         # @n3ary/gtfs-spec (also internal, recently published),
         # and we trust our own publish pipeline.
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm install --frozen-lockfile --trust-lockfile
 
       - name: Build adapter package
