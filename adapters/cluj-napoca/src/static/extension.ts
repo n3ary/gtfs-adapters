@@ -15,9 +15,8 @@
  */
 
 import type Database from 'better-sqlite3';
+import type { ColumnSpec } from '@n3ary/gtfs-spec/sql';
 import { resolveRouteColors, computeNetworkColors } from './route-colors';
-
-type ColumnSpec = readonly [string, string];
 
 export type ColumnExtension = {
   table: string;

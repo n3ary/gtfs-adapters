@@ -6,6 +6,8 @@ settings:
 
 importers:
 
+  .: {}
+
   adapters/cluj-napoca:
     dependencies:
       '@n3ary/gtfs-spec':
