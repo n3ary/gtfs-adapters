@@ -1,9 +1,9 @@
 {
-  "name": "cluj-napoca-gtfs-adapter",
-  "version": "0.1.3",
-  "private": false,
+  "name": "@n3ary/gtfs-adapter-cluj-napoca",
+  "version": "0.1.0",
+  "private": true,
   "type": "module",
-  "description": "Reconciled GTFS Schedule publisher for Cluj-Napoca (CTP) — combines Transitous seed, Tranzy.ai live static API, and CTP CSV timetables into the most complete, error-free feed.",
+  "description": "Cluj-Napoca (CTP) GTFS adapter — per-feed knowledge for the n3ary family. Reconciles Transitous seed + Tranzy.ai + CTP CSV into a clean GTFS zip, registers RT quirks with the generic gtfs-rt proxy. See https://github.com/n3ary/gtfs-adapters.",
   "main": "src/cli.ts",
   "bin": {
     "cluj-napoca-gtfs": "src/cli.ts"

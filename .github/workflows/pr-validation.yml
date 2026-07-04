@@ -1,0 +1,75 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+# Each adapter in adapters/ has its own validate job. The
+# standards-drift check runs once on the repo root.
+
+permissions:
+  contents: write  # version-bump action
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check vendored standards against n3ary/standards@main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          LATEST_SHA=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/n3ary/standards/commits/main \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"][:7])')
+          DRIFT=0
+          for f in docs/standards/*.md; do
+            [ -f "$f" ] || continue
+            HEAD=$(head -1 "$f" | grep -oP 'n3ary/standards@\K[a-f0-9]+' || true)
+            [ -z "$HEAD" ] && continue
+            if [ "$HEAD" != "$LATEST_SHA" ]; then
+              echo "Drift: $f vendored at $HEAD, latest is $LATEST_SHA"
+              DRIFT=1
+            fi
+          done
+          if [ "$DRIFT" = "1" ]; then
+            echo "Drift detected. Wait for the auto-sync PR from n3ary/standards, or run the vendor script locally."
+            exit 1
+          fi
+          echo "All vendored standards up to date with n3ary/standards@main ($LATEST_SHA)."
+
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter: [cluj-napoca]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6.0.9
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          pnpm clean --lockfile
+          pnpm install --no-frozen-lockfile
+          # Scope the install to the matrix adapter to avoid the
+          # workspace neighbours failing on missing secrets.
+          pnpm --filter @n3ary/gtfs-adapter-${{ matrix.adapter }} check
+          pnpm --filter @n3ary/gtfs-adapter-${{ matrix.adapter }} test
