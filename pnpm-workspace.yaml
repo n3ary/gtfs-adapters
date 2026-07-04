@@ -1,2 +1,12 @@
 packages:
   - 'adapters/*'
+
+# pnpm 11 blocks postinstall scripts by default. The cluj adapter
+# uses sharp (archiver zip writing) + esbuild (vitest/tsx binary
+# download) + protobufjs (gtfs-realtime-bindings needs it). Pre-
+# approve all of them here. Each adapter can override this in its
+# own pnpm-workspace.yaml if it has a different dep profile.
+allowBuilds:
+  esbuild: true
+  protobufjs: true
+  sharp: true
