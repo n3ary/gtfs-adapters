@@ -59,7 +59,17 @@ jobs:
         # and we trust our own publish pipeline.
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm install --frozen-lockfile --trust-lockfile
+          HOME: ${{ runner.temp }}/publish-adapter-clean-home
+        run: |
+          mkdir -p "$HOME"
+          # HOME-scoped .npmrc so pnpm auth reads from a clean location
+          # instead of inheriting the project's scope-only .npmrc (which
+          # has no _authToken line).
+          {
+            echo "@n3ary:registry=https://npm.pkg.github.com"
+            echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}"
+          } > "$HOME/.npmrc"
+          pnpm install --frozen-lockfile --trust-lockfile
 
       - name: Build adapter package
         run: pnpm --filter @n3ary/gtfs-adapter-cluj-napoca build
