@@ -1,0 +1,24 @@
+{
+  "//": "Build-mode tsconfig: emits to dist/, rewrites .ts import extensions to .js. Use `tsc -p tsconfig.build.json` for the published artifact; `tsc -p tsconfig.json` (noEmit) for the typecheck-only `check` script.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "removeComments": false,
+    "types": ["node"]
+  },
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tests",
+    "scripts",
+    "**/*.test.ts"
+  ]
+}

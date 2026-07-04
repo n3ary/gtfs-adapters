@@ -11,7 +11,7 @@ export {
   clujStaticExtension,
   applyClujStaticPostLoad,
   type ClujFeedConfig,
-} from './extension.ts';
+} from './extension';
 
 export type {
   StaticExtension,
@@ -19,7 +19,7 @@ export type {
   TableExtension,
   ExtensionContext,
   FillComputedColumnsHook,
-} from './extension.ts';
+} from './extension';
 
 export {
   normalizeColor,
@@ -30,4 +30,4 @@ export {
   computeNetworkColors,
   rotateHueOklch,
   oklabDistance,
-} from './route-colors.ts';
+} from './route-colors';

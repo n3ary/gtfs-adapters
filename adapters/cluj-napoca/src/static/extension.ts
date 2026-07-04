@@ -15,7 +15,7 @@
  */
 
 import type Database from 'better-sqlite3';
-import { resolveRouteColors, computeNetworkColors } from './route-colors.ts';
+import { resolveRouteColors, computeNetworkColors } from './route-colors';
 
 type ColumnSpec = readonly [string, string];
 

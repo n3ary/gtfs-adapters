@@ -1,15 +1,37 @@
 {
   "name": "@n3ary/gtfs-adapter-cluj-napoca",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Cluj-Napoca (CTP) GTFS adapter — per-feed knowledge for the n3ary family. Reconciles Transitous seed + Tranzy.ai + CTP CSV into a clean GTFS zip, registers RT quirks with the generic gtfs-rt proxy. See https://github.com/n3ary/gtfs-adapters.",
-  "main": "src/cli.ts",
-  "bin": {
-    "cluj-napoca-gtfs": "src/cli.ts"
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./static": {
+      "types": "./dist/static/index.d.ts",
+      "import": "./dist/static/index.js"
+    },
+    "./rt": {
+      "types": "./dist/rt/index.d.ts",
+      "import": "./dist/rt/index.js"
+    },
+    "./cli": "./dist/cli.js"
   },
+  "bin": {
+    "cluj-napoca-gtfs": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/cli.js",
+    "build:check": "tsc -p tsconfig.build.json --noEmit && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "build:run": "tsx src/cli.ts build",
     "build:full": "pnpm fetch:csv && pnpm build:run",
@@ -24,15 +46,25 @@
     "lint:fix": "eslint src/ tests/ --fix"
   },
   "engines": {
-    "node": ">=24",
-    "pnpm": ">=11"
+    "node": ">=24"
   },
   "packageManager": "pnpm@11.5.2",
+  "publishConfig": {
+    "@n3ary:registry": "https://npm.pkg.github.com",
+    "registry": "https://npm.pkg.github.com"
+  },
   "dependencies": {
     "@n3ary/gtfs-spec": "^0.3.2",
     "archiver": "^8.0.0",
-    "better-sqlite3": "^12.11.1",
     "gtfs-realtime-bindings": "^1.1.1"
+  },
+  "peerDependencies": {
+    "better-sqlite3": "^12.11.1"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
@@ -51,6 +83,5 @@
     "transitous",
     "tranzy",
     "reconciliation"
-  ],
-  "license": "PolyForm-Noncommercial-1.0.0"
+  ]
 }
