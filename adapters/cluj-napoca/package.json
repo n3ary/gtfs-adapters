@@ -15,6 +15,10 @@
       "types": "./dist/static/index.d.ts",
       "import": "./dist/static/index.js"
     },
+    "./ingest": {
+      "types": "./dist/ingest/index.d.ts",
+      "import": "./dist/ingest/index.js"
+    },
     "./rt": {
       "types": "./dist/rt/index.d.ts",
       "import": "./dist/rt/index.js"
