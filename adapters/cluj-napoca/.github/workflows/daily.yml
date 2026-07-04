@@ -1,0 +1,115 @@
+name: "Daily build → binaries"
+
+# Builds output/cluj-napoca.gtfs.zip and pushes it to the `binaries` branch.
+# Triggers: cron at 00:30 UTC (after Transitous's ~00:00 UTC import)
+# + manual workflow_dispatch + push to main.
+
+on:
+  schedule:
+    - cron: '30 0 * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Stage 1 — fetch CTP timetables
+        # Phase 1 — fetch. Authoritative route list is the union of Tranzy
+        # (source of truth for what CTP operates) + Transitous (id
+        # stability). For each route × service key, fetches the CTP CSV,
+        # parses it, and writes the body + a status manifest to
+        # .build-input/ for the build step. Fails loud on any infra miss
+        # (WAF / HTTP 5xx / network) — operator must rerun after upstream
+        # recovers.
+        run: npm run fetch:csv
+        env:
+          TRANZY_API_KEY: ${{ secrets.TRANZY_API_KEY }}
+          TRANZY_AGENCY_ID: '2'
+
+      - name: Stage 2 — build feed
+        # Phase 2 — assemble. Reads CSVs from .build-input/csv/ (no upstream
+        # fetch). If .build-input/csv-status.json is missing (smoke wasn't
+        # run or failed), this step fails loud with a helpful message.
+        run: node src/cli.js build
+        env:
+          TRANZY_API_KEY: ${{ secrets.TRANZY_API_KEY }}
+          TRANZY_AGENCY_ID: '2'
+
+      - name: Trip-ID format self-check
+        # Self-check on OUR output: every trip_id in trips.txt must end
+        # in _HHMM (4 digits) so neary's parseLiveStartMin fallback can
+        # extract start time from the suffix when TripDescriptor.start_time
+        # is missing. Catches accidental format regressions. We do NOT
+        # assert parity against the live RT feed — the neary reconciler
+        # matches by (route, direction, time), not trip_id.
+        run: npm run smoke:trip-ids
+
+      - name: Publish to binaries branch
+        run: |
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          REMOTE="https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
+          DIR="/tmp/binaries"
+
+          if ! git clone --single-branch --branch binaries --depth 1 "$REMOTE" "$DIR" 2>/dev/null; then
+            # First-ever build: create as orphan.
+            git clone --depth 1 "$REMOTE" "$DIR"
+            cd "$DIR"
+            git checkout --orphan binaries
+            cd -
+          fi
+
+          cd "$DIR"
+          # The `binaries` branch is the artifact namespace — only this
+          # build's outputs should land on it. Wipe both tracked and
+          # untracked files so leftover paths from previous builds (e.g.
+          # output/cluj-napoca.gtfs.zip from before the root-path change)
+          # don't accumulate forever.
+          git rm -rf . >/dev/null 2>&1 || true
+          git clean -fdx >/dev/null 2>&1 || true
+          cd -
+
+          mkdir -p "$DIR"
+          cp output/cluj-napoca.gtfs.zip "$DIR/cluj-napoca.gtfs.zip"
+
+          cd "$DIR"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no changes to publish"
+          else
+            git commit -m "pipeline: $DATE"
+            git push origin binaries
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Smoke-test the published URL (next day)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          URL="https://raw.githubusercontent.com/n3ary/cluj-napoca-gtfs-adapter/binaries/cluj-napoca.gtfs.zip"
+          echo "Validating $URL"
+          curl -sI "$URL" | head -5

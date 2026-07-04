@@ -1,0 +1,18 @@
+packages:
+  - '.'
+
+# pnpm 11 blocks postinstall scripts by default. The cluj adapter's
+# only native dep is archiver (pure-JS zip writer, no postinstall
+# needed). tsx + vitest (devDeps) need esbuild to download its
+# platform binary — pre-approve it here.
+allowBuilds:
+  esbuild: true
+
+minimumReleaseAgeExclude:
+  - '@n3ary/gtfs-spec@0.3.1'
+
+# pnpm 11 defaults to a 24h minimumReleaseAge cutoff. The
+# @n3ary/gtfs-spec dep is a private in-org package that's versioned
+# in lockstep with the consumer (app) and this sister repo; no
+# supply-chain risk from short windows. Bump to a longer cutoff if
+# the adapter ever starts consuming from npmjs.

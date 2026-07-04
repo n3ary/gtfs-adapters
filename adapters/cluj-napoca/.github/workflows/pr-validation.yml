@@ -1,0 +1,75 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+# Ensure the PR is up-to-date before merging (protects version sequencing).
+# GitHub branch protection "Require branches to be up to date" enforces this
+# at the merge button level; this workflow re-validates on every push.
+
+permissions:
+  contents: write  # needed by the version-bump action to push the bot commit
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6.0.9
+        # version omitted — pnpm-action-setup reads the exact version
+        # from package.json#packageManager. Specifying both caused
+        # ERR_PNPM_BAD_PM_VERSION in pnpm action v6.x.
+
+      - name: Install dependencies
+        # @n3ary/gtfs-spec is private on GitHub Packages (org-private,
+        # not org-public). The auto-provided GITHUB_TOKEN has no
+        # packages:read here, so a separate NPM_TOKEN is required.
+        # Owner: create a fine-grained PAT with
+        #   Resource: n3ary/gtfs-spec, Role: Read
+        # at https://github.com/settings/personal-access-tokens/new and
+        # replace the current NPM_TOKEN secret (which is temporarily
+        # set to the local `gh auth token` as a stopgap for this PR).
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          pnpm config set //npm.pkg.github.com/:_authToken "$NPM_TOKEN"
+          # pnpm 11 verifies the lockfile's tarball URLs against the
+          # registry. A freshly-published @n3ary/gtfs-spec can fail
+          # with ERR_PNPM_TARBALL_URL_MISMATCH if the lockfile was
+          # generated before the publish settled. Clean the lockfile
+          # and let pnpm re-resolve with current registry data.
+          pnpm clean --lockfile
+          pnpm install --no-frozen-lockfile
+
+      - name: Auto-bump version to main + 1
+        uses: n3ary/actions/.github/actions/version-bump@v1
+        with:
+          # Skip the bump when the PR touches only docs/,
+          # .github/, .gitignore, or LICENSE. The default already
+          # covers .github/, .gitignore, LICENSE; explicitly
+          # including docs/ to match this repo's daily pipeline
+          # paths-ignore semantics.
+          bump-skip-paths: 'docs/,.github/,.gitignore,LICENSE'
+
+      - name: Validate
+        # `pnpm run validate` requires the produced zip on disk, which
+        # the PR-validation smoke can't build without `TRANZY_API_KEY`
+        # + live CSVs (network). The full reconcile smoke runs in
+        # the daily workflow where the secret is configured. PR
+        # validation just runs the test suite + a smoke reconcile
+        # via the test fixture.
+        run: pnpm test

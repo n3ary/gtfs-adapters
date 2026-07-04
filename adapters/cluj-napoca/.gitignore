@@ -1,0 +1,12 @@
+node_modules/
+output/
+*.log
+.env
+.env.local
+.DS_Store
+coverage/
+dist/
+*.tmp
+.build-input/
+# CI deploy bundle (Cloudflare Pages) — never committed
+deploy/
