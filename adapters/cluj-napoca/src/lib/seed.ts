@@ -28,6 +28,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import { parseRoutes, parseStops, parseTrips, parseStopTimesStream, parseShapesStream } from '@n3ary/gtfs-spec/spec';
+import { assertNotWafBuffer } from '@n3ary/gtfs-spec/waf';
 
 const REQUIRED = ['agency.txt', 'routes.txt', 'stops.txt', 'trips.txt', 'stop_times.txt'];
 const OPTIONAL = ['shapes.txt', 'calendar.txt', 'calendar_dates.txt', 'feed_info.txt'];
@@ -177,67 +178,11 @@ export async function fetchToFile(url, dest, { userAgent = USER_AGENT, fetch: fe
   // downstream or parsed garbage rows. The resulting GTFS shipped
   // to consumers crashed 'stops near me' (and other views) with
   // SQL errors against bogus data.
+  //
+  // WAF body guard lives in @n3ary/gtfs-spec/waf (one source of
+  // truth, shared with the publisher and any future adapter). See
+  // n3ary/gtfs-publisher#100 for the extraction PR.
   const buf = Buffer.from(await res.arrayBuffer());
-  assertSeedZipBody(buf, url);
+  assertNotWafBuffer(buf, url, 'zip');
   await pipeline(Readable.from(buf), createWriteStream(dest));
-}
-
-/**
- * Guard a buffer against WAF / captcha / maintenance HTML bodies
- * BEFORE writing to disk. Mirrors the publisher-side
- * `assertNotWafBody` guard (see n3ary/gtfs-publisher#99 for the
- * upstream fix). Kept local here because the two repos have
- * separate dependency graphs and the snippets are small enough
- * that a shared package would be over-engineering.
- *
- * Throws with the URL + the first matched marker (or a hex prefix
- * of the body) so the build fails loudly via the caller's
- * unhandled-rejection path. The CTP CSV multi-fetch layer already
- * has its own fail-fast (`fetchAllCsvSchedules`); this fills the
- * gap below it for the Transitous seed download.
- */
-export function assertSeedZipBody(buf, url) {
-  const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]); // 'PK\x03\x04'
-  // Cheap path: ZIP magic. If the body looks like a zip, trust it
-  // and return - covers the overwhelmingly common case.
-  if (buf.length >= 4 && buf.subarray(0, 4).equals(ZIP_MAGIC)) return;
-
-  // Otherwise sniff the first ~1 KB for HTML/WAF markers + Content-Type
-  // -style preamble. Some WAFs strip / mislabel headers; sniff is
-  // the last line of defense.
-  const head = buf.subarray(0, Math.min(buf.length, 1024)).toString('utf8').toLowerCase();
-  const MARKERS = [
-    '<!doctype html',
-    '<html',
-    'cloudflare',
-    'attention required',
-    'cf-mitigated',
-    'just a moment',
-    'checking your browser',
-    'access denied',
-    'forbidden',
-    'captcha',
-  ];
-  for (const m of MARKERS) {
-    if (head.includes(m)) {
-      throw new Error(
-        `GET ${url}: upstream body contains "${m}" marker - ` +
-        `looks like a WAF / captcha page. Aborting to avoid shipping poisoned output.`,
-      );
-    }
-  }
-
-  // Not a zip AND no WAF markers - something else weird (truncated
-  // download, partial Content-Length mismatch, etc.). Surface the
-  // first 64 bytes so the operator can diagnose.
-  const preview = buf.subarray(0, Math.min(buf.length, 64))
-    .toString('utf8')
-    .replace(/[\x00-\x1f\x7f]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  throw new Error(
-    `GET ${url}: upstream body is not a ZIP file ` +
-    `(first bytes: "${preview.slice(0, 64)}") - ` +
-    `aborting to avoid shipping poisoned output.`,
-  );
 }
