@@ -74,6 +74,7 @@ vi.mock('../../src/sources/ctp-csv/index.ts', async (importOriginal) => {
       return { byRouteService, warnings: [] };
     },
     readCtpCsvFromDisk: () => '',  // unused under mocked fetchAllCsvSchedules
+    fetchCtpCsv: async () => '',  // unused under mocked fetchAllCsvSchedules
     parseCtpCsv: mod.parseCtpCsv,
   };
 });

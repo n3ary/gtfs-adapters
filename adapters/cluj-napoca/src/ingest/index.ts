@@ -32,7 +32,7 @@ import { join } from 'node:path';
 
 import { TranzyClient } from '../sources/tranzy/index.ts';
 import { loadTransitousSeed } from '../sources/transitous/index.ts';
-import { fetchAllCsvSchedules, readCtpCsvFromDisk } from '../sources/ctp-csv/index.ts';
+import { fetchAllCsvSchedules, fetchCtpCsv } from '../sources/ctp-csv/index.ts';
 import { CSV_SERVICE_KEYS } from '../sources/ctp-csv/client.ts';
 import { reconcile } from '../assemble/index.ts';
 import { writeGtfsZip } from '../gtfs.ts';
@@ -147,8 +147,11 @@ export async function ingestBuild(opts: IngestOptions): Promise<IngestResult> {
   }
 
   // 3. CSV reconcile (status >= 400 is fatal — surfaced by fetchAllCsvSchedules).
+  // Default to fetching CSVs on demand from the CTP server. Pass
+  // `opts.ctp.fetchFn` to override (e.g. tests inject `readCtpCsvFromDisk`
+  // to read pre-staged CSV fixtures from .build-input/csv/).
   const csv = await fetchAllCsvSchedules(seed.routes, {
-    loadFn: fetchFn ?? readCtpCsvFromDisk,
+    loadFn: fetchFn ?? fetchCtpCsv,
     serviceKeys,
   });
   console.log(`[ctp-csv] scraped ${csv.byRouteService.size} routes`);
