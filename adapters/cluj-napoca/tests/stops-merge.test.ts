@@ -21,19 +21,19 @@ import { reconcileStops, stopsToTxt } from '../src/assemble/merge/stops.ts';
 // line is the header; values keyed by header name). Inlined here
 // because the adapter doesn't depend on the orchestrator's csv util
 // — duplicating ~25 lines is cheaper than a workspace dep.
-function parseCsv(text) {
+function parseCsv(text: string) {
   const lines = text.split(/\r?\n/);
   let i = 0;
   while (i < lines.length && (lines[i] ?? '').trim().length === 0) i++;
   if (i >= lines.length) return [];
   const header = (lines[i] ?? '').split(',');
-  const out = [];
+  const out: Record<string, string>[] = [];
   for (let j = i + 1; j < lines.length; j++) {
     const rawLine = lines[j] ?? '';
     if (rawLine.length === 0) continue;
     const cols = rawLine.split(',');
-    const row = {};
-    for (let k = 0; k < header.length; k++) row[header[k]] = cols[k] ?? '';
+    const row: Record<string, string> = {};
+    for (let k = 0; k < header.length; k++) row[header[k] ?? ''] = cols[k] ?? '';
     out.push(row);
   }
   return out;
