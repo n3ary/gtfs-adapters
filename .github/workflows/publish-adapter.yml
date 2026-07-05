@@ -149,7 +149,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish adapter
-        uses: n3ary/actions/.github/actions/adapters/publish@v16
+        uses: n3ary/actions/.github/actions/adapters/publish@v17
         with:
           adapter: ${{ matrix.adapter }}
           version-override: ${{ needs.detect.outputs.force_version }}
