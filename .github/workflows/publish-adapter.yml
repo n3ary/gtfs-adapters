@@ -1,132 +1,155 @@
-name: Publish @n3ary/gtfs-adapter-cluj-napoca
-
-# Publishes adapters/cluj-napoca to GitHub Packages
-# (https://npm.pkg.github.com/).
-#
-# Triggers:
-#   - workflow_dispatch with a `version` input (e.g. "0.1.0",
-#     "0.2.0-rc.1"). Bumps the package.json version, commits, tags,
-#     publishes.
-#   - push of a tag matching adapters/cluj-napoca/v* — publishes
-#     that exact version.
-#
-# Authentication: GITHUB_TOKEN with `packages: write`. No additional
-# secrets required (the same pattern as n3ary/gtfs's publish-spec).
-#
-# Consumers (n3ary/gtfs, future adapters) add this to their .npmrc:
-#   @n3ary:registry=https://npm.pkg.github.com
-# then `npm install @n3ary/gtfs-adapter-cluj-napoca` works.
+name: Publish adapters
+description: >-
+  Triggers on PR merges to main when adapter code / package.json /
+  tsconfig files change. Detects which adapters changed via
+  `git diff` between base and merge_commit_sha, then calls
+  `n3ary/actions/adapters/publish@v1` once per adapter via a matrix.
+  `workflow_dispatch` is kept for emergency hot-fixes via the
+  `version-override` input.
 
 on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+    paths:
+      - 'adapters/*/package.json'
+      - 'adapters/*/src/**'
+      - 'adapters/*/tsconfig*.json'
+      - 'adapters/*/tsconfig.*.json'
+      - 'pnpm-workspace.yaml'
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version to publish (e.g. 0.1.0, 0.2.0-rc.1). Leave blank to publish the current package.json version as-is.'
+      adapter:
+        description: >-
+          Adapter directory name (e.g. `cluj-napoca`). Leave blank
+          to auto-detect from package.json changes.
         required: false
         type: string
-  push:
-    tags:
-      - 'adapters/cluj-napoca/v*'
+      version:
+        description: >-
+          Force a specific version (e.g. `0.3.4`). Triggers the
+          workflow_dispatch version-override path in the composite.
+        required: false
+        type: string
 
 permissions:
-  contents: write
-  packages: write
-  id-token: write
+  contents: write   # git tag + push (action steps)
+  packages: write   # npm publish to GH Packages (action steps)
+  id-token: write   # OIDC for SLSA provenance (future-proofing)
 
 jobs:
-  publish:
+  detect:
+    name: Identify adapters to publish
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.merged == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      adapters: ${{ steps.find.outputs.list }}
+      force-version: ${{ steps.find.outputs.force_version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Node
-        uses: actions/setup-node@v6.4.0
-        with:
-          node-version: 24
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6.0.9
-
-      - name: Install dependencies
-        # --trust-lockfile: lockfile is part of the source tree and
-        # goes through PR review. pnpm-workspace.yaml sets
-        # minimumReleaseAge: 0 because every adapter depends on
-        # @n3ary/gtfs-spec (also internal, recently published),
-        # and we trust our own publish pipeline.
+      - name: Find changed adapter packages
+        id: find
+        shell: bash
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          HOME: ${{ runner.temp }}/publish-adapter-clean-home
+          INPUT_ADAPTER: ${{ inputs.adapter }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          mkdir -p "$HOME"
-          # HOME-scoped .npmrc so pnpm auth reads from a clean location
-          # instead of inheriting the project's scope-only .npmrc (which
-          # has no _authToken line).
-          {
-            echo "@n3ary:registry=https://npm.pkg.github.com"
-            echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}"
-          } > "$HOME/.npmrc"
-          pnpm install --frozen-lockfile --trust-lockfile
+          set -uo pipefail
 
-      - name: Build adapter package
-        run: pnpm --filter @n3ary/gtfs-adapter-cluj-napoca build
+          ADAPTERS=""
+          FORCE_VERSION=""
 
-      - name: Test adapter package
-        run: pnpm --filter @n3ary/gtfs-adapter-cluj-napoca test
-
-      - name: Set version
-        id: set-version
-        # workflow_dispatch + version input → bump package.json + tag.
-        # Tag push → use the version already in the tag.
-        # No version input → publish whatever is in package.json.
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
-        run: |
-          VERSION="${{ github.event.inputs.version }}"
-          # Validate version format (semver-ish; prerelease ok)
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
-            echo "::error::Invalid version format: $VERSION (expected e.g. 0.1.0 or 0.2.0-rc.1)"
-            exit 1
-          fi
-          cd adapters/cluj-napoca
-          CURRENT=$(node -p "require('./package.json').version")
-          if [ "$CURRENT" != "$VERSION" ]; then
-            # Bump + commit + tag + push. The next 'Publish' step reads
-            # the updated package.json so the version field is current.
-            npm version "$VERSION" --no-git-tag-version
-            cd ../..
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add adapters/cluj-napoca/package.json
-            git commit -m "chore(release): @n3ary/gtfs-adapter-cluj-napoca v${VERSION}"
-            git tag "adapters/cluj-napoca/v${VERSION}"
-            git push origin "adapters/cluj-napoca/v${VERSION}" --no-verify
-            git push origin HEAD --no-verify
-            echo "Bumped: $CURRENT → $VERSION"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            # Manual trigger. Honor explicit adapter input; otherwise
+            # publish every adapter dir that has a package.json.
+            if [ -n "$INPUT_ADAPTER" ]; then
+              ADAPTERS="$INPUT_ADAPTER"
+            else
+              ADAPTERS=$(find adapters -mindepth 2 -maxdepth 2 \
+                          -name package.json -printf '%h\n' \
+                        | sed 's#^adapters/##' \
+                        | tr '\n' ' ')
+            fi
+            FORCE_VERSION="$INPUT_VERSION"
           else
-            echo "Version already at $VERSION — skipping bump"
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+            # PR-merge. Resolve the SHAs and diff for the merge.
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.merge_commit_sha }}"
 
-      - name: Publish to GitHub Packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOME: ${{ runner.temp }}/publish-adapter-clean-home
-        run: |
-          mkdir -p "$HOME"
-          {
-            echo "@n3ary:registry=https://npm.pkg.github.com"
-            echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}"
-          } > "$HOME/.npmrc"
-          cd adapters/cluj-napoca
-          # --access restricted: this package lives in the @n3ary
-          # org-scoped registry at GH Packages with private visibility
-          # (matches @n3ary/gtfs-spec's current visibility). Drop
-          # --provenance because npm refuses to attach an SLSA
-          # attestation to restricted-visibility packages; the
-          # supply-chain context we care about is captured by tag +
-          # workflow provenance instead.
-          npm publish --access restricted
-        continue-on-error: false
+            # Touching a top-level config file (pnpm-workspace.yaml,
+            # adapters/*/tsconfig*.json) doesn't change a specific
+            # adapter's package.json, but it does change the build
+            # surface for every adapter. Treat that as a "publish all"
+            # signal so a tsconfig bump doesn't silently leave
+            # downstream consumers on a stale build.
+            CHANGED=$(git diff --name-only \
+                        --diff-filter=ACMR \
+                        "$BASE_SHA" "$HEAD_SHA" \
+                        -- 'adapters/*/package.json' \
+                           'adapters/*/src/**' \
+                           'adapters/*/tsconfig*.json' \
+                           'adapters/*/tsconfig.*.json' \
+                           'pnpm-workspace.yaml')
+            PJSON_CHANGED=$(echo "$CHANGED" \
+              | grep -E '^adapters/[^/]+/package\.json$' || true)
+            NON_PJSON_CHANGED=$(echo "$CHANGED" \
+              | grep -vE '^adapters/[^/]+/package\.json$' || true)
+
+            if [ -n "$PJSON_CHANGED" ]; then
+              # Specific adapter packages changed -- publish only those.
+              ADAPTERS=$(echo "$PJSON_CHANGED" \
+                | awk -F/ '{print $2}' \
+                | sort -u \
+                | tr '\n' ' ')
+            fi
+
+            if [ -n "$NON_PJSON_CHANGED" ]; then
+              # tsconfig / shared config changed -- publish everything
+              # whose package.json we have, so downstream picks up
+              # the new build output.
+              ALL=$(find adapters -mindepth 2 -maxdepth 2 \
+                      -name package.json -printf '%h\n' \
+                    | sed 's#^adapters/##' \
+                    | tr '\n' ' ')
+              ADAPTERS=$(printf '%s\n%s\n' "$ADAPTERS" "$ALL" \
+                          | awk 'NF' | sort -u | tr '\n' ' ')
+            fi
+          fi
+
+          if [ -z "$ADAPTERS" ]; then
+            echo "No adapter changed; skipping."
+            echo "list=" >> "$GITHUB_OUTPUT"
+          else
+            echo "Will publish: $ADAPTERS"
+            ADAPTERS_JSON=$(echo "$ADAPTERS" \
+              | tr ' ' '\n' \
+              | jq -R '. as $a | select($a != "")' \
+              | jq -s '.')
+            echo "list=${ADAPTERS_JSON}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "force_version=${FORCE_VERSION}" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish ${{ matrix.adapter }}
+    needs: detect
+    if: needs.detect.outputs.list != '' && needs.detect.outputs.list != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter: ${{ fromJSON(needs.detect.outputs.list) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Publish adapter
+        uses: n3ary/actions/adapters/publish@v1
+        with:
+          adapter: ${{ matrix.adapter }}
+          version-override: ${{ needs.detect.outputs.force_version }}
