@@ -11,8 +11,8 @@ on:
 # Repo-specific jobs (validate matrix per adapter) stay local.
 
 permissions:
-  contents: write  # version-bump action (legacy; future bump will move
-                   # to n3ary/actions too)
+  contents: write  # adapters/publish action (now version-bump@v12 inside)
+                   # pushes bump commits back to PR branch.
 
 jobs:
   shared:
@@ -32,34 +32,17 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Node
-        uses: actions/setup-node@v6.4.0
+      - name: Setup pnpm with GH Packages auth + install
+        # --trust-lockfile: the lockfile is part of the source tree
+        # and goes through PR review. pnpm 11's supply-chain
+        # re-verification (which rejects freshly-published internal
+        # packages within 24h) is bypassed.
+        uses: n3ary/actions/.github/actions/setup-pnpm-gh-packages-auth@v14
         with:
-          node-version: 24
+          auth-token: ${{ secrets.NPM_TOKEN }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.9
+      - name: Check (matrix adapter)
+        run: pnpm --filter @n3ary/gtfs-adapter-${{ matrix.adapter }} check
 
-      - name: Install dependencies
-        # HOME-scoped .npmrc (mirrors the orchestrator's pattern in
-        # n3ary/gtfs-publisher/.github/workflows/pr-validation.yml) -
-        # pnpm reads auth from .npmrc in HOME, and setting it
-        # explicitly avoids inherited state from the runner image.
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          HOME: ${{ runner.temp }}/gtfs-adapters-pr-clean-home
-        run: |
-          mkdir -p "$HOME"
-          {
-            echo "@n3ary:registry=https://npm.pkg.github.com"
-            echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}"
-          } > "$HOME/.npmrc"
-          # --trust-lockfile: the lockfile is part of the source tree
-          # and goes through PR review. We don't need pnpm 11's
-          # supply-chain re-verification (which rejects freshly-
-          # published internal packages within 24h).
-          pnpm install --frozen-lockfile --trust-lockfile
-          # Scope the install to the matrix adapter to avoid the
-          # workspace neighbours failing on missing secrets.
-          pnpm --filter @n3ary/gtfs-adapter-${{ matrix.adapter }} check
-          pnpm --filter @n3ary/gtfs-adapter-${{ matrix.adapter }} test
+      - name: Test (matrix adapter)
+        run: pnpm --filter @n3ary/gtfs-adapter-${{ matrix.adapter }} test
