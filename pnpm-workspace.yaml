@@ -28,9 +28,15 @@ minimumReleaseAge: 0
 # minutes and produce `ERR_PNPM_TARBALL_URL_MISMATCH` in CI even
 # though locally everything works.
 #
-# Trust policy set to `no-fallback` means "use the lockfile hashes
+# Trust policy set to `off` means "use the lockfile hashes
 # as the source of truth, don't re-verify against the live registry"
 # — same intent as `--trust-lockfile` on the CLI but persistent.
 # The lockfile is part of the source tree and goes through PR
 # review, so its hashes are already trusted.
-trustPolicy: no-fallback
+#
+# Note: the policy name was previously documented as `no-fallback`
+# (legacy v10 syntax). pnpm 11 only accepts `off` or `no-downgrade`;
+# any other value is silently ignored, so the re-verify step still
+# runs in CI even though the config reads correctly. See pnpm 11
+# source: `validateTrustPolicy` enum is `["off", "no-downgrade"]`.
+trustPolicy: off
