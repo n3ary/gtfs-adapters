@@ -51,7 +51,7 @@ import { warnMsg, info } from '../lib/log-severity.ts';
  *   stats: object,
  * }}
  */
-export function reconcile({ seed, tranzy, csv, options = {} }) {
+export async function reconcile({ seed, tranzy, csv, options = {} }) {
   const warnings = [];
 
   const { routes, byRouteId: routesByRouteId } = reconcileRoutes({ seed, tranzy, warnings });
@@ -195,15 +195,20 @@ export function reconcile({ seed, tranzy, csv, options = {} }) {
     warnings.push(info(`networks: ${formatNetworkUsageSummary(networkUsage)}`));
   }
 
+  // All `*ToTxt` writers are async since they go through the spec's
+  // serializeRows helper (which dynamic-imports csv-stringify/sync).
+  // Promise.all keeps the writes concurrent — each writer hits a
+  // tiny csv-stringify import that's cached after the first call,
+  // so the dynamic-import overhead is amortised across all 6.
   const files = {
     'agency.txt': agencyTxt,
-    'routes.txt': routesToTxt(routes),
-    'stops.txt': stopsToTxt(stops),
-    'shapes.txt': shapeRows.length === 0 ? '' : shapesToTxt(shapeRows),
-    'trips.txt': tripsToTxt(allTripRows),
-    'stop_times.txt': stopTimesToTxt(allStopTimeRows),
-    'calendar.txt': calendarToTxt(calendarRows),
-    'frequencies.txt': frequenciesToTxt(frequencyRows),
+    'routes.txt': await routesToTxt(routes),
+    'stops.txt': await stopsToTxt(stops),
+    'shapes.txt': shapeRows.length === 0 ? '' : await shapesToTxt(shapeRows),
+    'trips.txt': await tripsToTxt(allTripRows),
+    'stop_times.txt': await stopTimesToTxt(allStopTimeRows),
+    'calendar.txt': await calendarToTxt(calendarRows),
+    'frequencies.txt': await frequenciesToTxt(frequencyRows),
     'networks.txt': networksTxt,
     'route_networks.txt': routeNetworksTxt,
     'feed_info.txt': feedInfoTxt({

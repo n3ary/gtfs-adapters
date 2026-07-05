@@ -357,14 +357,14 @@ describe('reconcileRoutes — route_type policy (Tranzy primary)', () => {
 });
 
 describe('routesToTxt', () => {
-  it('serializes route_color and route_text_color in the expected columns', () => {
+  it('serializes route_color and route_text_color in the expected columns', async () => {
     const tranzy = {
       routes: [
         { route_id: '7', route_short_name: '7', route_long_name: 'Plain', route_type: 3, route_color: 'D24CAE' },
       ],
     };
     const { routes } = reconcileRoutes({ seed: seedOf([]), tranzy, warnings: [] });
-    const txt = routesToTxt(routes);
+    const txt = await routesToTxt(routes);
     const [header, row] = txt.trim().split('\n');
     const cols = row.split(',');
     const headers = header.split(',');

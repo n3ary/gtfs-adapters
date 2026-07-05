@@ -1,6 +1,6 @@
 {
   "name": "@n3ary/gtfs-adapter-cluj-napoca",
-  "version": "0.2.8",
+  "version": "0.3.0",
   "type": "module",
   "description": "Cluj-Napoca (CTP) GTFS adapter — per-feed knowledge for the n3ary family. Reconciles Transitous seed + Tranzy.ai + CTP CSV into a clean GTFS zip, registers RT quirks with the generic gtfs-rt proxy. See https://github.com/n3ary/gtfs-adapters.",
   "license": "PolyForm-Noncommercial-1.0.0",
@@ -58,7 +58,7 @@
     "registry": "https://npm.pkg.github.com"
   },
   "dependencies": {
-    "@n3ary/gtfs-spec": "^0.3.2",
+    "@n3ary/gtfs-spec": "^0.4.0",
     "archiver": "^8.0.0",
     "gtfs-realtime-bindings": "^1.1.1"
   },

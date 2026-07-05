@@ -1,5 +1,5 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
-import { RouteRowSchema, type RouteRow } from '@n3ary/gtfs-spec/spec';
+import { RouteRowSchema, serializeRows, type RouteRow } from '@n3ary/gtfs-spec/spec';
 /**
  * Routes reconciliation.
  *
@@ -586,35 +586,12 @@ export function reconcileRoutes({ seed, tranzy, warnings }) {
  * Serialize routes rows to GTFS routes.txt body.
  *
  * @param {Array<object>} routes  output of `reconcileRoutes`
- * @returns {string}
+ * @returns {Promise<string>}
  */
-export function routesToTxt(routes) {
-  // Canonical routes.txt columns from the shared spec. Same rationale
-  // as stopsToTxt: Object.keys gives the spec-defined columns in
-  // reference order; .passthrough() doesn't add to the list.
-  const headers = Object.keys(RouteRowSchema.shape);
-  const lines = [headers.join(',')];
-  for (const r of routes) {
-    lines.push([
-      csvField(r.route_id),
-      csvField(r.agency_id ?? '2'),
-      csvField(r.route_short_name),
-      csvField(r.route_long_name),
-      csvField(r.route_desc ?? ''),
-      csvField(r.route_type),
-      '', // route_url
-      csvField(r.route_color),
-      csvField(r.route_text_color ?? ''),
-    ].join(','));
-  }
-  return lines.join('\n') + '\n';
-}
-
-/** Quote a field if it contains comma, quote, or newline. */
-function csvField(v) {
-  const s = (v ?? '').toString();
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
+export async function routesToTxt(routes) {
+  // Spec-driven serializer — same pattern as stopsToTxt. Column order
+  // comes from `Object.keys(RouteRowSchema.shape)` and drives both
+  // header AND value positions, so reordering fields in the schema
+  // can't silently desync the output.
+  return serializeRows(RouteRowSchema, routes);
 }

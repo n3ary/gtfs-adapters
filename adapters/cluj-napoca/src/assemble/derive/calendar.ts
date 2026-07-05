@@ -1,6 +1,6 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 
-import { CalendarRowSchema } from '@n3ary/gtfs-spec/spec';
+import { CalendarRowSchema, serializeRows } from '@n3ary/gtfs-spec/spec';
 
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 /**
@@ -79,26 +79,9 @@ function addDays(d, n) {
   return out;
 }
 
-export function calendarToTxt(rows) {
-  // Canonical calendar.txt columns from the shared spec.
-  const headers = Object.keys(CalendarRowSchema.shape);
-  const lines = [headers.join(',')];
-  for (const r of rows) {
-    lines.push([
-      csvField(r.service_id),
-      r.monday, r.tuesday, r.wednesday, r.thursday, r.friday, r.saturday, r.sunday,
-      r.start_date, r.end_date,
-    ].join(','));
-  }
-  return lines.join('\n') + '\n';
-}
-
-function csvField(v) {
-  const s = (v ?? '').toString();
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
+export async function calendarToTxt(rows) {
+  // Spec-driven serializer — same pattern as stopsToTxt/routesToTxt.
+  return serializeRows(CalendarRowSchema, rows);
 }
 
 export const SUPPORTED_SERVICE_IDS = Object.keys(SERVICE_WEEKDAYS);

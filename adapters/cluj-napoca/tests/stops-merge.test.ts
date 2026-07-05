@@ -40,7 +40,7 @@ function parseCsv(text: string) {
 }
 
 describe('stopsToTxt (regression: daily-cron column-shift bug)', () => {
-  it('emits stops.txt with stop_lat/stop_lon in their canonical columns', () => {
+  it('emits stops.txt with stop_lat/stop_lon in their canonical columns', async () => {
     // Minimal fixture: 2 Transitous stops + 1 Tranzy stop. All have
     // valid coordinates. The reconcile is identity-ish for this test
     // (we just want stopsToTxt output to be parseable by header).
@@ -57,7 +57,7 @@ describe('stopsToTxt (regression: daily-cron column-shift bug)', () => {
     };
 
     const { stops } = reconcileStops({ seed, tranzy, warnings: [] });
-    const txt = stopsToTxt(stops);
+    const txt = await stopsToTxt(stops);
 
     // Parse by header — this is what deriveBbox() does in production.
     const rows = parseCsv(txt);

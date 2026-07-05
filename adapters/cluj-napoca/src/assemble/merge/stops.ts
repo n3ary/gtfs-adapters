@@ -1,5 +1,5 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
-import { StopRowSchema } from '@n3ary/gtfs-spec/spec';
+import { StopRowSchema, serializeRows } from '@n3ary/gtfs-spec/spec';
 /**
  * Stops reconciliation.
  *
@@ -101,45 +101,17 @@ function formatCoord(n) {
   return Number(n).toFixed(6);
 }
 
-export function stopsToTxt(stops) {
-  // Use the canonical stops.txt column list from the shared spec.
-  // Object.keys(StopRowSchema.shape) gives the spec-defined columns
-  // in reference order. .passthrough() means the schema accepts
-  // extras; this list does not, which is correct for the output zip.
+export async function stopsToTxt(stops) {
+  // Use the spec-driven serializer. Column order comes from
+  // `Object.keys(StopRowSchema.shape)` and drives BOTH the header
+  // line AND each row's field positions — so reordering fields in
+  // StopRowSchema can never silently desync the output (PR #8 had
+  // to fix exactly this: hand-positioned values against hand-
+  // positioned headers drifted, leaving stop_lat empty and breaking
+  // the orchestrator's deriveBbox).
   //
-  // CRITICAL: column POSITIONS must match the header order, otherwise
-  // consumers that read by header name (e.g. the orchestrator's
-  // deriveBbox()) will see empty values. Earlier versions of this
-  // function emitted values shifted by one column, leaving the actual
-  // `stop_lat` column empty and causing the daily cron to fail with
-  // "no stops with valid coordinates".
-  const headers = Object.keys(StopRowSchema.shape);
-  const lines = [headers.join(',')];
-  for (const s of stops) {
-    lines.push([
-      csvField(s.stop_id),                              // stop_id
-      csvField(s.stop_code ?? ''),                      // stop_code
-      csvField(s.stop_name ?? ''),                      // stop_name
-      csvField(s.stop_lat),                             // stop_lat  ← FIX: was ''
-      csvField(s.stop_lon),                             // stop_lon  ← FIX: shifted
-      '',                                                // stop_lat_lon_present (always empty — phantom field, not real GTFS)
-      '',                                                // zone_id
-      '',                                                // stop_url
-      csvField(s.location_type ?? '0'),                 // location_type
-      csvField(s.parent_station ?? ''),                 // parent_station
-      '',                                                // stop_timezone
-      csvField(s.wheelchair_boarding ?? ''),            // wheelchair_boarding
-      '',                                                // level_id
-      '',                                                // platform_code
-    ].join(','));
-  }
-  return lines.join('\n') + '\n';
-}
-
-function csvField(v) {
-  const s = (v ?? '').toString();
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
+  // The phantom `stop_lat_lon_present` column from the old StopRowSchema
+  // is gone (removed in @n3ary/gtfs-spec 0.4.0 — never was a real
+  // GTFS field, just a leftover from someone's experimental schema).
+  return serializeRows(StopRowSchema, stops);
 }

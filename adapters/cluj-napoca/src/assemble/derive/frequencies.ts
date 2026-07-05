@@ -1,6 +1,6 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 
-import { type StopTimeRow, type ShapeRow } from '@n3ary/gtfs-spec/spec';
+import { type StopTimeRow, type ShapeRow, FrequenciesRowSchema, serializeRows } from '@n3ary/gtfs-spec/spec';
 
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 /**
@@ -244,29 +244,10 @@ function findRouteByShortName(routesByRouteId, shortName) {
   return null;
 }
 
-export function frequenciesToTxt(rows) {
+export async function frequenciesToTxt(rows) {
   if (rows.length === 0) return '';
-  // Canonical frequencies.txt columns per the GTFS reference. The
-  // @n3ary/gtfs-spec package doesn't yet model frequencies.txt; if it
-  // ever does, swap this for Object.keys(FrequenciesRowSchema.shape).
-  const headers = ['trip_id', 'start_time', 'end_time', 'headway_secs', 'exact_times'];
-  const lines = [headers.join(',')];
-  for (const r of rows) {
-    lines.push([
-      csvField(r.trip_id),
-      csvField(r.start_time),
-      csvField(r.end_time),
-      csvField(r.headway_secs),
-      csvField(r.exact_times),
-    ].join(','));
-  }
-  return lines.join('\n') + '\n';
-}
-
-function csvField(v) {
-  const s = (v ?? '').toString();
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
+  // Spec-driven serializer — added @n3ary/gtfs-spec 0.4.0 to bring
+  // frequencies.txt in line with the other writers. Column order
+  // comes from `Object.keys(FrequenciesRowSchema.shape)`.
+  return serializeRows(FrequenciesRowSchema, rows);
 }
