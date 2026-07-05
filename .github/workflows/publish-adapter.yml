@@ -137,11 +137,11 @@ jobs:
   publish:
     name: Publish ${{ matrix.adapter }}
     needs: detect
-    if: needs.detect.outputs.list != '' && needs.detect.outputs.list != '[]'
+    if: needs.detect.outputs.adapters != '' && needs.detect.outputs.adapters != '[]'
     strategy:
       fail-fast: false
       matrix:
-        adapter: ${{ fromJSON(needs.detect.outputs.list) }}
+        adapter: ${{ fromJSON(needs.detect.outputs.adapters) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
