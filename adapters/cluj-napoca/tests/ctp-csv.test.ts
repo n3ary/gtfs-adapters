@@ -31,7 +31,7 @@ describe('parseCtpCsv', () => {
     // dir1 had no frequency annotations.
     expect(result.frequencyAnnotations.dir1.ranges).toEqual([]);
     expect(result.frequencyAnnotations.dir1.headways).toEqual([]);
-    // No warnings — we classified, not dropped.
+    // No warnings - we classified, not dropped.
     expect(result.warnings).toEqual([]);
   });
 
@@ -111,5 +111,58 @@ describe('fetchAllCsvSchedules', () => {
     // Only 35 fixtures are returned; M26 hits the CSV '35' by accident, but
     // that's fine for this concurrency test.
     expect(warnings).toBeDefined();
+  });
+
+  it('throws when ANY fetch returns a WAF-style non-CSV body (fail-fast)', async () => {
+    // Simulate CTP's WAF firing on every request: 200 OK with a
+    // captcha HTML body. fetchCtpCsv's per-fetch behavior (return null)
+    // is unchanged - the fail-fast lives at the multi-fetch layer.
+    // Without this guard the 12:49 UTC 2026-07-05 daily run shipped a
+    // cluj-napoca feed with 6% of its trips (951/15053) and surfaced
+    // as "no stops near me" in the consumer app.
+    const fetch = async () =>
+      new Response(
+        '<!DOCTYPE html><html lang="en"><head>captcha</head><body>verify</body></html>',
+        { status: 200, headers: { 'Content-Type': 'text/html' } },
+      );
+    await expect(
+      fetchAllCsvSchedules(
+        [{ shortName: '35' }, { shortName: 'M26' }],
+        {
+          serviceKeys: ['lv', 's'],
+          serviceIdMap: { lv: 'LV', s: 'S' },
+          fetch,
+        },
+      ),
+    ).rejects.toThrow(/CTP CSV scrape aborted.*WAF.*captcha.*maintenance/);
+  });
+
+  it('does NOT throw when only a partial WAF occurs (single-route transient)', async () => {
+    // Per the chosen "any WAF fails" policy, even a single WAF throws.
+    // This test pins the chosen threshold so a future relaxation
+    // (e.g. "majority blocked" instead of "any") is an intentional,
+    // reviewed change rather than accidental drift.
+    let callCount = 0;
+    const fetch = async () => {
+      callCount++;
+      // First call is a WAF challenge page; subsequent calls succeed.
+      if (callCount === 1) {
+        return new Response('<!DOCTYPE html>captcha</html>', {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        });
+      }
+      return new Response(fixtures.csv['35'].LV, { status: 200 });
+    };
+    await expect(
+      fetchAllCsvSchedules(
+        [{ shortName: '35' }],
+        {
+          serviceKeys: ['lv', 's'],
+          serviceIdMap: { lv: 'LV', s: 'S' },
+          fetch,
+        },
+      ),
+    ).rejects.toThrow(/CTP CSV scrape aborted/);
   });
 });
