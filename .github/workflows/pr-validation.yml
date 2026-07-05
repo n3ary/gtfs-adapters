@@ -4,57 +4,19 @@ on:
   pull_request:
     branches: [main]
 
-# Each adapter in adapters/ has its own validate job. The
-# standards-drift check runs once on the repo root. The
-# ascii-check job runs first (fast-fail) on every PR.
+# Shared base PR-validation lives in n3ary/actions and bundles:
+#   - ascii-check (commit msgs + PR title)
+#   - drift-check (vendored n3ary/standards SHA)
+#   - line-length-check (changed files vs 80 chars)
+# Repo-specific jobs (validate matrix per adapter) stay local.
 
 permissions:
-  contents: write  # version-bump action
+  contents: write  # version-bump action (legacy; future bump will move
+                   # to n3ary/actions too)
 
 jobs:
-  ascii-check:
-    # Fail fast before the heavier validate matrix runs.
-    # Catches non-ASCII (em-dash, en-dash, arrows, ellipsis,
-    # smart quotes, NBSP, ZWJ, ...) in commit messages or PR
-    # titles. See .github/actions/ascii-commits README at
-    # github.com/n3ary/actions for details.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: ASCII-only check
-        uses: n3ary/actions/.github/actions/ascii-commits@v1
-
-  drift-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Check vendored standards against n3ary/standards@main
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-          LATEST_SHA=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" \
-            https://api.github.com/repos/n3ary/standards/commits/main \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"][:7])')
-          DRIFT=0
-          for f in docs/standards/*.md; do
-            [ -f "$f" ] || continue
-            HEAD=$(head -1 "$f" | grep -oP 'n3ary/standards@\K[a-f0-9]+' || true)
-            [ -z "$HEAD" ] && continue
-            if [ "$HEAD" != "$LATEST_SHA" ]; then
-              echo "Drift: $f vendored at $HEAD, latest is $LATEST_SHA"
-              DRIFT=1
-            fi
-          done
-          if [ "$DRIFT" = "1" ]; then
-            echo "Drift detected. Wait for the auto-sync PR from n3ary/standards, or run the vendor script locally."
-            exit 1
-          fi
-          echo "All vendored standards up to date with n3ary/standards@main ($LATEST_SHA)."
+  shared:
+    uses: n3ary/actions/.github/workflows/pr-validation.yml@v1
 
   validate:
     runs-on: ubuntu-latest
@@ -80,7 +42,7 @@ jobs:
 
       - name: Install dependencies
         # HOME-scoped .npmrc (mirrors the orchestrator's pattern in
-        # n3ary/gtfs-publisher/.github/workflows/pr-validation.yml) —
+        # n3ary/gtfs-publisher/.github/workflows/pr-validation.yml) -
         # pnpm reads auth from .npmrc in HOME, and setting it
         # explicitly avoids inherited state from the runner image.
         env:
