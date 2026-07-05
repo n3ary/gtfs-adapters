@@ -26,7 +26,7 @@ Without either header the API returns 401. With a valid key but the wrong
 agency id, endpoints that the agency hasn't opted into return **404** rather
 than 403 — see "Quirks" below.
 
-Recommended User-Agent: `cluj-napoca-gtfs-adapter/0.1 (+https://github.com/ciotlosm/cluj-napoca-gtfs-adapter)`.
+Recommended User-Agent: `cluj-napoca-gtfs-adapter/0.3.3 (+https://github.com/n3ary/gtfs-adapters/tree/main/adapters/cluj-napoca)`.
 Tranzy doesn't reject unknown UAs but a self-identifying one is polite and
 helps debugging if you ever need to talk to them.
 

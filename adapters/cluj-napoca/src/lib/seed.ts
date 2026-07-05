@@ -32,7 +32,7 @@ import { parseRoutes, parseStops, parseTrips, parseStopTimesStream, parseShapesS
 const REQUIRED = ['agency.txt', 'routes.txt', 'stops.txt', 'trips.txt', 'stop_times.txt'];
 const OPTIONAL = ['shapes.txt', 'calendar.txt', 'calendar_dates.txt', 'feed_info.txt'];
 
-export const USER_AGENT = 'cluj-napoca-gtfs-adapter/0.1 (https://github.com/ciotlosm/cluj-napoca-gtfs-adapter)';
+export const USER_AGENT = 'cluj-napoca-gtfs-adapter/0.3.3 (https://github.com/n3ary/gtfs-adapters/tree/main/adapters/cluj-napoca)';
 
 /**
  * @param {string} source  absolute file path OR http(s) URL

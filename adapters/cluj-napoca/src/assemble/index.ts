@@ -279,6 +279,6 @@ function feedInfoTxt({ buildDate, startDate, endDate }) {
   const version = yyyymmdd(buildDate);
   return [
     'feed_publisher_name,feed_publisher_url,feed_lang,feed_start_date,feed_end_date,feed_version',
-    `cluj-napoca-gtfs-adapter,https://github.com/ciotlosm/cluj-napoca-gtfs-adapter,ro,${startDate ?? version},${endDate ?? version},${version}`,
+    `cluj-napoca-gtfs-adapter,https://github.com/n3ary/gtfs-adapters/tree/main/adapters/cluj-napoca,ro,${startDate ?? version},${endDate ?? version},${version}`,
   ].join('\n') + '\n';
 }
