@@ -4,14 +4,14 @@
 > What's still faked, approximated, or just plain missing. Each entry
 > links to the upstream issue or source so we know what to track.
 
-## 1. ~~CSV frequency annotations are silently dropped~~ — FIXED in v0.1
+## 1. CSV frequency annotations
 
 **Source:** [`neary-gtfs#15`](https://github.com/ciotlosm/neary-gtfs/issues/15) (M26)
 
 The CTP CSV occasionally publishes cells that aren't `HH:MM` departure
 times — they're headway / range annotations like `05:05-22:40` or
-`10-20min`. The v0.0 adapter dropped these silently. The v0.1 adapter
-parses them and emits a `frequencies.txt` row + a synthetic anchor trip.
+`10-20min`. The adapter parses them and emits a `frequencies.txt` row +
+a synthetic anchor trip.
 
 Recognized cell formats:
 
@@ -55,20 +55,19 @@ consumers interpret `frequencies.txt` rows as overriding the anchor's
 scheduled times, so the effective schedule is "every 15 minutes between
 05:05 and 22:40".
 
-**Edge cases (still approximate):**
+**Edge cases (approximate):**
 
 - **Only a headway, no range.** We use the default window `05:00–23:00`
   (urban-bus assumption) and log a warning.
 - **Only a range, no headway.** We use the default headway 900 s
   (15 min) and log a warning.
 - **Multiple non-overlapping ranges** on the same route/day. We use
-  earliest start and latest end. A future refinement could emit one
-  frequencies.txt row per range.
+  earliest start and latest end. Could emit one `frequencies.txt` row
+  per range.
 - **Range crossing midnight** (e.g. `22:00-02:00`). The parser doesn't
   recognize this; treat as malformed → warning.
 
-Test coverage: `tests/frequencies.test.js`. The fix is also wired into
-the `assemble/index.js` orchestrator and surfaces in `stats.frequencyAnchors`.
+Test coverage: `tests/frequencies.test.ts`.
 
 ## 2. Routes without CSV data fall back to the (potentially stale) seed
 
@@ -83,7 +82,7 @@ investigation). These break down as:
 | Night routes (*N) | M26N, M41N, 4N | May use different naming. We currently miss them entirely. |
 | Emerson shuttle (88*) | 88A–88L | Event/shift routes — depends on event calendar we don't have. |
 | Special/seasonal | 30U (Untold festival), CS (CURSA SPECIALĂ), D51 | Festival-only; expected zero trips outside the event window. |
-| Suspended | M35, 2, M12L, M34B, 40S, 87B, 8D, 8S, 39S, 52B, 101A | CSV says "Nu circula" / "In lucru". Zero trips is correct. (`39 CREIC` is no longer in this list — see [`canonicalShortName`](../src/sources/ctp-csv/shortname-aliases.js).) |
+| Suspended | M35, 2, M12L, M34B, 40S, 87B, 8D, 8S, 39S, 52B, 101A | CSV says "Nu circula" / "In lucru". Zero trips is correct. (`39 CREIC` is no longer in this list — see [`canonicalShortName`](../src/sources/ctp-csv/shortname-aliases.ts).) |
 | Active but no CSV | (none confirmed at the moment) | If the seed also has no pattern for these, we silently emit zero trips. |
 
 For routes without CSV but with **seed pattern** (`routes.txt` has the
@@ -96,12 +95,6 @@ For routes without CSV **and** without seed pattern (silent zero-trip
 output): we currently log a warning and emit zero trips. The Tranzy
 fallback fixes a subset of these (cases where Tranzy has a
 `(route_id, direction_id)` pattern the seed is missing — see `neary-gtfs#13`).
-For the rest, the only fix is to discover that CTP publishes the route
-under a different URL or schedule.
-
-**Future:** add an "active routes without schedule" investigation
-workflow. For each such route, check Tranzy's `/vehicles` to see if any
-bus is currently on it. If yes, treat as a data-quality bug.
 
 ## 3. Synthetic arrival/departure times when shape is missing
 
@@ -114,16 +107,11 @@ through buildings, etc.
 
 **Detection:** if `shape_dist_traveled` between consecutive stops is
 ~equal to the haversine distance (within 5%) across the whole trip, we're
-in haversine fallback. Log a warning per affected trip.
+in haversine fallback. Log a warning per affected trip. The warning
+surfaces in the orchestrator's daily cron's reconcile log.
 
-**Fix:** nothing — the alternative is no schedule at all. Worth flagging
+**Fix:** none — the alternative is no schedule at all. Worth flagging
 to the consumer app so it can show "approximate times" rather than "live".
-
-**Status (2026-07):** this fallback now runs inside the orchestrator's
-`ingestBuild()` path — the warning surfaces in the daily cron's
-`reconcile` log. The local `cli.ts build` path that this doc originally
-described was retired when `gtfs-publisher` became the canonical
-build driver.
 
 ## 4. Calendar is synthesized from the CSV service keys we actually scraped
 
@@ -135,7 +123,7 @@ If only `lv` succeeds for a route, that route's trips are tagged with
 (default 180). Out-of-window trips are not currently generated.
 
 **Implication:** the GTFS-Realtime feed (`cluj-rt-feed.gtfs.ro`) which our
-trip IDs must match is **not** calendar-aware in the same way. We may need
+trip IDs might match is **not** calendar-aware in the same way. We may need
 to align `calendar.txt` with CTP's published service calendar — separate
 investigation.
 
@@ -165,22 +153,24 @@ We write `agency_timezone=Europe/Bucharest` from config. The seed's
 override it unconditionally. The neary#87 spec calls for a build-time
 warning when a feed has multiple `agency.txt` rows with different
 timezones — we implement that check but do not act on it (single-agency
-feeds only).
+feeds only). The orchestrator's `validate.ts` runs zip-level checks
+on adapter-driven feeds; cross-reference orphans (incl. services
+referenced by `trips.service_id` but missing from `calendar.txt`) are
+caught at build time and fail the daily cron loud.
 
-**Status (2026-07):** the orchestrator's `validate.ts` (Layer 1
-from PR #84 in `n3ary/gtfs-publisher`) now runs zip-level checks on
-adapter-driven feeds too. Cross-reference orphans (incl. services
-referenced by `trips.service_id` but missing from `calendar.txt`)
-are caught at build time and fail the daily cron loud.
+## 8. Trip ID format
 
-## 8. ~~`cluj-rt-feed.gtfs.ro` trip-id parity is a contract, not verified~~ — RE-EXAMINED in v0.2
+Trip-id format is `${route_id}_${dir}_${serviceId}_${HHMM}` (or
+`_NTxxx` for Tranzy-fallback trips). The trailing `_HHMM` lets
+`neary`'s `parseLiveStartMin` extract a scheduled start time when
+`TripDescriptor.start_time` is missing — fallback, not the canonical
+JOIN key.
 
 > [!IMPORTANT]
-> **This was based on a wrong assumption.** Re-read after the user's
-> pushback: `neary/src/lib/domain/reconcile.ts` matches live
-> observations to scheduled trips by `(routeId, directionId,
-> tripStartMin)` — **not** by `trip_id` equality. The header comment
-> in that file is explicit:
+> **Trip IDs are not contract-bound to `cluj-rt-feed.gtfs.ro` GTFS-RT.**
+> `neary/src/lib/domain/reconcile.ts` matches live observations to
+> scheduled trips by `(routeId, directionId, tripStartMin)` — not by
+> `trip_id` equality. The header comment on that file is explicit:
 >
 > > *"trip_id equality is NOT used as a fast-path. Some operators
 > > publish static GTFS and GTFS-RT from independent build pipelines
@@ -189,73 +179,27 @@ are caught at build time and fail the daily cron loud.
 > > Cluj sampling 2026-06-27 showed ~23% of live trip_ids drifted
 > > from their static counterparts by ±1 run number and/or ±a few
 > > minutes in HHMM."*
->
-> The "parity" check is now a self-check on **our** output (not a
-> check against the RT feed). What we DO need to assert: our static
-> trip_ids end in `_HHMM` so neary's `parseLiveStartMin` can extract
-> start time from the suffix when `TripDescriptor.start_time` is
-> missing.
 
-Trip-id format changed in v0.2: dropped the `seq` segment.
-
-| | Before (v0.1) | After (v0.2) |
-|---|---|---|
-| Format | `${route_id}_${dir}_${serviceId}_${seq}_${HHMM}` | `${route_id}_${dir}_${serviceId}_${HHMM}` |
-| `seq` segment | present (unused) | dropped |
-| `seq` used? | nowhere — dead weight | dropped |
-| Claimed to match RT | yes (false) | no — explicitly disclaimed |
-| HHMM tail required | yes | yes |
-| CI check | asserted parity vs live RT feed | asserts our own output ends in `_HHMM` |
-
-**Status (2026-07):** the script was renamed `verify-rt-parity.ts`
-→ `verify-trip-id-format.ts` (the old name was misleading — it's a
-self-check, not a parity check). Run locally after building:
+The trip-id format self-check is internal-only: every emitted
+`trip_id` ends in `_HHMM` so the `parseLiveStartMin` fallback always
+works. Run locally:
 
 ```bash
 pnpm build
 pnpm smoke:trip-ids
 ```
 
-In CI the step runs in this repo's workflows (orchestrator cron calls
-`ingestBuild` directly, but local smoke runs and the published
-package's `verify-trip-id-format.ts` invocation remain the canonical
-trip-id format regression check).
+CI runs the same step in `pr-validation.yml`.
 
-## 9. README "limitations" section is the same as this doc
+## 9. Canonical publish lives in `n3ary/gtfs-publisher`
 
-Once the README is finalized, this doc becomes the long-form version.
-For now both exist and may drift.
+The orchestrator (`n3ary/gtfs-publisher`) is the canonical publisher of
+this adapter's output to Cloudflare R2 (`neary-gtfs/feeds.json`). The
+`neary` PWA reads from R2. The adapter exposes `ingestBuild()` and three
+subpaths (`./ingest`, `./static`, `./rt`) — `ingestBuild()` is the only
+runtime entry point; the other two are loaded by the orchestrator for
+sqlite extension columns and GTFS-RT quirks respectively.
 
-**Status (2026-07):** this entry is no longer accurate. The README
-now points at the orchestrator-driven build flow and references
-`docs/architecture.md` as the canonical description of how the
-adapter runs in production. The "what lives in neary-gtfs after
-this lands" section that was here previously is gone — the refactor
-landed.
-
-## 10. Canonical publish lives in `n3ary/gtfs-publisher` (not here)
-
-The orchestrator (`n3ary/gtfs-publisher`) is the canonical publisher
-of this adapter's output to Cloudflare R2 (`neary-gtfs/feeds.json`).
-The `neary` PWA reads from R2 — it does **not** read from a GitHub
-`binaries` branch anymore.
-
-Historically this repo published `output/cluj-napoca.gtfs.zip` to
-its own `binaries` branch via a daily CI (`npm run fetch:csv` →
-`node src/cli.js build`). That side channel is now retired:
-
-- The `binaries` branch no longer exists in this repo's remote refs
-  (last release removed the publish step).
-- The local two-phase pipeline (`scripts/fetch-stage.ts` populating
-  `.build-input/csv/`, then `cli.ts build` reading from disk) is
-  replaced by a single-phase `ingestBuild()` that fetches CSVs
-  live from CTP upstream.
-- `src/cli.ts`, `scripts/fetch-stage.ts`, `scripts/inspect-404s.ts`,
-  `src/lib/build-input.ts`, and the local `haversineMeters` copy in
-  `src/assemble/merge/shapes.ts` were all deleted in v0.3.3.
-  The standalone CLI is gone; `ingestBuild()` is the only runtime
-  entry point.
-
-Downstream consumers (`neary`, anyone reading `feeds.json`) reach
-this adapter's output exclusively through the orchestrator's R2
-publish — see `n3ary/gtfs-publisher`'s `daily.yml` for the cron.
+Downstream consumers (`neary`, anyone reading `feeds.json`) reach this
+adapter's output exclusively through the orchestrator's R2 publish —
+see `n3ary/gtfs-publisher`'s `daily.yml` for the cron.

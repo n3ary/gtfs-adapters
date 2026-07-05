@@ -9,45 +9,55 @@ Produce a single reconciled GTFS Schedule zip for CTP Cluj-Napoca
 - **Tranzy.ai** — live-updated static API, per-direction shapes
 - **CTP CSV timetables** — authoritative departure times
 
-…and is published by the orchestrator (`n3ary/gtfs-publisher`) to
-Cloudflare R2 so the [neary](https://github.com/ciotlosm/neary) PWA
-can consume it like any other GTFS source.
+…published by the orchestrator (`n3ary/gtfs-publisher`) to Cloudflare R2 so
+the [neary](https://github.com/ciotlosm/neary) PWA can consume it like any
+other GTFS source.
 
 ## Driver: `n3ary/gtfs-publisher` orchestrator
 
-This adapter's runtime is now driven by the `gtfs-publisher`
-orchestrator. Daily flow:
+```mermaid
+flowchart TB
+  cron["gtfs-publisher cron (00:30 UTC)"]
+  static["packages/gtfs-static pipeline<br/>node dist/cli.js"]
+  acquire["acquireGtfsAdapter<br/>(feedId, publisher)"]
+  dyn["dynamic-import<br/>${publisher}/ingest"]
+  ingest["ingestBuild<br/>(outputDir, buildDate, secrets)"]
+  seed["Transitous seed load"]
+  tranzy["Tranzy fetch"]
+  csv["CTP CSV scrape<br/>live, on demand"]
+  emit["reconcile → serialize via spec"]
+  zip["writeGtfsZip<br/>→ { zip, sizeBytes }"]
+  ext["deriveBbox + makeSqlite<br/>+ ${publisher}/static extension"]
+  r2["Cloudflare R2<br/>neary-gtfs/feeds.json"]
 
-```
-gtfs-publisher cron (00:30 UTC)
-  → packages/gtfs-static pipeline (`node dist/cli.js`)
-    → for source.type === 'adapter' feeds:
-      → acquireGtfsAdapter(feedId, publisher)
-        → dynamic-import(`${publisher}/ingest`)
-          → ingestBuild({ outputDir, buildDate, secrets })
-            → Transitous seed load
-            → Tranzy fetch
-            → CTP CSV scrape (live, on demand)
-            → reconcile → serialize via spec
-            → writeGtfsZip → return { zip, sizeBytes }
-        ← bytes
-      → deriveBbox + makeSqlite (with ${publisher}/static extension)
-      → publish zip + sqlite to R2 + update feeds.json
+  cron --> static
+  static --> acquire
+  acquire --> dyn
+  dyn --> ingest
+  ingest --> seed
+  ingest --> tranzy
+  ingest --> csv
+  seed --> emit
+  tranzy --> emit
+  csv --> emit
+  emit --> zip
+  zip --> static
+  static --> ext
+  ext --> r2
 ```
 
-The adapter **never** touches R2, never schedules itself, never owns a
-CLI. It just exposes `ingestBuild()` and three subpaths:
+The adapter has no CLI and no schedule of its own. It exposes `ingestBuild()`
+and three subpaths:
 
 - `./ingest` — `ingestBuild` (the runtime entry; required)
-- `./static` — `staticExtension(feedConfig)` for sqlite columns
-  (route colors + `_neary_config` table); required by the
-  orchestrator's `makeSqlite`
-- `./rt` — `clujRtQuirk` for the GTFS-RT proxy in `gtfs-rt`; loaded
-  by the orchestrator's quirk registry
+- `./static` — `staticExtension(feedConfig)` for sqlite columns (route
+  colors + `_neary_config` table); required by the orchestrator's
+  `makeSqlite`
+- `./rt` — `clujRtQuirk` for the GTFS-RT proxy in `gtfs-rt`; loaded by
+  the orchestrator's quirk registry
 
-See `src/ingest/index.ts:38-77` for the `IngestOptions` /
-`IngestResult` contract and `src/static/index.ts` for the extension
-shape.
+See `src/ingest/index.ts:38-77` for the `IngestOptions` / `IngestResult`
+contract and `src/static/index.ts` for the extension shape.
 
 ## Why three sources?
 
@@ -77,67 +87,30 @@ the IDs downstream apps already key on*.
 
 ## Data flow
 
-```
-   ┌──────────────┐  ┌────────────┐         ┌──────────────────┐
-   │  Transitous  │  │   Tranzy   │         │  CTP CSV scrape  │
-   │  seed zip    │  │  /routes   │         │  ctpcj.ro/orare/ │
-   │  (no auth)   │  │  /stops    │         │  csv/orar_*.csv  │
-   │              │  │  /trips    │         │  (WAF headers)   │
-   │              │  │  /shapes   │         │                  │
-   │              │  │  /stop_tim │         │                  │
-   │              │  │  (X-API-KEY│         │                  │
-   │              │  │  + AGENCY) │         │                  │
-   └──────┬───────┘  └─────┬──────┘         └────────┬─────────┘
-          │                │                         │
-          ▼                ▼                         ▼
-       ┌──────────────────────────────────────────────────┐
-       │  src/sources/  (each = client.ts + transform.ts) │
-       │  tranzy/   transitous/   ctp-csv/               │
-       │  (REST)    (zip)         (REST, live)           │
-       │  + index.ts entry-point per source              │
-       └─────────────────────┬────────────────────────────┘
-                             │
-                             ▼
-       ┌──────────────────────────────────────────────────┐
-       │  src/assemble/                                   │
-       │                                                  │
-       │  merge/   ← combine multiple sources             │
-       │    routes.ts    stops.ts    shapes.ts           │
-       │                                                  │
-       │  derive/  ← build one structure from inputs      │
-       │    patterns.ts   calendar.ts   frequencies.ts   │
-       │                                                  │
-       │  emit/    ← generate GTFS rows                  │
-       │    trips.ts   tranzy-fallback.ts   networks.ts  │
-       │                                                  │
-       │  check/   ← coverage warnings (CTP-specific)    │
-       │    data-quality.ts                             │
-       │                                                  │
-       │  index.ts (top-level orchestrator for `reconcile`) │
-       │                                                  │
-       │  See docs/assemble-rules.md for priority table   │
-       │  and edge-case handling.                         │
-       └─────────────────────┬────────────────────────────┘
-                             │
-                             ▼
-       ┌──────────────────────────────────────────────────┐
-       │              src/gtfs.ts                         │
-       │   write .txt files → output/cluj-napoca.gtfs.zip │
-       │   (agency, routes, stops, shapes, calendar,      │
-       │    trips, stop_times, networks,                  │
-       │    route_networks, feed_info)                   │
-       │   (All writers use @n3ary/gtfs-spec/serialize —  │
-       │    spec owns column order + RFC 4180 quoting.)   │
-       └─────────────────────┬────────────────────────────┘
-                             │
-                             ▼
-                { zip: Buffer, sizeBytes: number }
-                             │
-                             ▼
-                  gtfs-publisher orchestrator
-                             │
-                             ▼
-                  Cloudflare R2 (neary-gtfs/feeds.json)
+```mermaid
+flowchart TB
+  subgraph sources[src/sources/]
+    t1["Transitous seed zip<br/>(no auth)"]
+    t2["Tranzy REST client<br/>routes/stops/trips<br/>shapes/stop_times<br/>(X-API-KEY + X-AGENCY-ID: 2)"]
+    t3["CTP CSV scrape<br/>ctpcj.ro/orare/csv/orar_*.csv"]
+  end
+
+  subgraph assemble[src/assemble/]
+    m["merge/  routes, stops, shapes"]
+    d["derive/ patterns, calendar, frequencies"]
+    e["emit/   trips, networks, tranzy-fallback"]
+    c["check/  data-quality (CTP-specific)"]
+  end
+
+  gtfs["src/gtfs.ts<br/>write 8 .txt files + feed_info<br/>via @n3ary/gtfs-spec/serialize<br/>→ output/cluj-napoca.gtfs.zip"]
+
+  sources --> assemble
+  m --> e
+  d --> e
+  e --> c
+  e --> gtfs
+  gtfs --> orch["gtfs-publisher orchestrator"]
+  orch --> r2["Cloudflare R2<br/>neary-gtfs/feeds.json"]
 ```
 
 ## Components
@@ -160,10 +133,6 @@ Each upstream source has its own folder with a 3-file structure:
   (multi-fetch orchestrator), `parseCtpCsv()` (pure parser),
   `buildCtpCsvUrl()` + `normalizeShortNameForCtpUrl()` (URL builder —
   the latter strips whitespace so `39 CREIC` becomes `39CREIC`).
-  Note: previously also exposed `readCtpCsvFromDisk()` for a
-  two-phase smoke→build pipeline. That helper was retired when
-  `gtfs-publisher` became the canonical build driver — the live
-  fetch path here is now the only entry point the adapter uses.
 
 ### `src/assemble/`
 
@@ -213,8 +182,8 @@ Pure helpers, no I/O.
   night speed model + shape projection + dwell).
 - `polyline.ts` — `cumulativeShapeDistances()` (adapter-specific
   composition helper) + re-exports of `haversineMeters` and
-  `projectOnPolyline` from `@n3ary/gtfs-spec/shape` (canonical
-  shared math).
+  `projectOnPolyline` from `@n3ary/gtfs-spec/shape` (canonical shared
+  math).
 - `log-severity.ts` — tagged warning objects (`{severity, message, meta}`)
   with GHA `::group::` rendering and ANSI colors.
 
@@ -222,16 +191,13 @@ Pure helpers, no I/O.
 
 The output writer. Given the assembled in-memory structures from
 `src/assemble/`, writes the eight required GTFS `.txt` files plus
-`feed_info.txt` into a zip using `archiver`. (Previously also exposed
-`validateGtfsZip()`; that responsibility moved to
-`n3ary/gtfs-publisher`'s `validate.ts` + the spec DDL's CHECK + FK
-constraints.)
+`feed_info.txt` into a zip using `archiver`. Column order and RFC 4180
+quoting come from `@n3ary/gtfs-spec/serialize`.
 
 ### `src/ingest/index.ts`
 
 The runtime entry point. Exports `ingestBuild(opts)` returning
-`{ zip, sizeBytes }`. This is what `gtfs-publisher`'s orchestrator
-dynamic-imports and calls.
+`{ zip, sizeBytes }`. The orchestrator dynamic-imports this and calls it.
 
 ### `src/static/index.ts`
 
@@ -244,8 +210,15 @@ can apply route-color substitution + network-color writeback.
 ### `src/rt/index.ts`
 
 The GTFS-RT quirk for the CTP live feed. Exports `clujRtQuirk`,
-`parseClujTripId`, `registerRtQuirks`. Consumed by the
-`gtfs-rt` proxy's quirk registry.
+`parseClujTripId`, `registerRtQuirks`. Consumed by the `gtfs-rt`
+proxy's quirk registry.
+
+### `src/verify-trip-id-format.ts`
+
+CLI: `tsx src/verify-trip-id-format.ts`. Reads an emitted zip and asserts
+every `trips.txt` row's `trip_id` ends in `_HHMM` (or `_NTxxx` for
+Tranzy-fallback trips). Lets `neary`'s `parseLiveStartMin` extract the
+scheduled start time from the suffix.
 
 ## Build / publish
 
@@ -253,16 +226,10 @@ The GTFS-RT quirk for the CTP live feed. Exports `clujRtQuirk`,
 - `pnpm test` — `vitest --run`. 164 tests.
 - `pnpm check` — `tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit`.
 - `pnpm smoke:trip-ids` — `tsx src/verify-trip-id-format.ts`.
-  Self-checks that every emitted `trip_id` ends in `_HHMM` (or `_NTxxx`
-  for Tranzy-fallback trips), so the `neary` app's `parseLiveStartMin`
-  fallback can extract the scheduled start time from the suffix.
-  (Not a "parity check" against an external RT feed — those don't
-  share IDs. See `docs/known-limitations.md` § RT parity for the
-  full story on why that was misunderstood.)
 
 Publishing: `adapters/cluj-napoca/v*` tags trigger
-`.github/workflows/publish-adapter.yml` which calls
-`npm publish --provenance --access public` against GitHub Packages.
-The orchestrator pins an exact version in
+`.github/workflows/publish-adapter.yml` which runs
+`npm publish --access restricted` against GitHub Packages. The
+orchestrator pins an exact version in
 `packages/gtfs-static/package.json` and bumps it in a PR after each
 release.

@@ -1,12 +1,10 @@
 # cluj-napoca-gtfs-adapter
 
 Reconciled GTFS Schedule publisher for Cluj-Napoca (CTP) — combines three
-independent data sources into the most complete, error-free feed possible.
-
-> [!NOTE]
-> Built to retire `neary-gtfs/feeds/cluj-napoca/build.js` once stable.
-> The daily published zip at `output/cluj-napoca.gtfs.zip` is what
-> `neary-gtfs` will eventually proxy.
+independent data sources into one feed. Runtime entry point is `ingestBuild()`,
+called by [`n3ary/gtfs-publisher`](https://github.com/n3ary/gtfs-publisher)
+which publishes the resulting zip + sqlite to Cloudflare R2 for the
+[neary](https://github.com/ciotlosm/neary) PWA.
 
 ## What it does
 
@@ -18,101 +16,101 @@ Pulls data from three independent sources and reconciles them:
 | **Tranzy.ai** (`api.tranzy.ai`) | Live-updated static data, per-direction shapes | Fills gaps when Transitous is missing directions (`neary-gtfs#13`, `#15`) |
 | **CTP CSV timetables** (`ctpcj.ro/orare/csv/`) | Authoritative departure times | Per-route, per-service-day schedules |
 
-…and writes a standards-compliant `cluj-napoca.gtfs.zip` ready for any
-GTFS consumer.
+Output zip: `cluj-napoca.gtfs.zip`. See [`docs/architecture.md`](./docs/architecture.md)
+for the data flow and [`docs/assemble-rules.md`](./docs/assemble-rules.md) for
+the source priority table.
 
-See [`docs/assemble-rules.md`](./docs/assemble-rules.md) for
-the full priority table.
+## Deployment
 
-## Quick start
+The adapter is a library — it has no CLI, no schedule, and no direct
+network access from its own cron. The orchestrator drives the build:
 
-```bash
-git clone https://github.com/ciotlosm/cluj-napoca-gtfs-adapter.git
-cd cluj-napoca-gtfs-adapter
-npm install
+```mermaid
+flowchart TB
+  cron["gtfs-publisher cron (00:30 UTC)"]
+  static["packages/gtfs-static pipeline<br/>node dist/cli.js"]
+  acquire["acquireGtfsAdapter<br/>(feedId='cluj-napoca', publisher)"]
+  dyn["dynamic-import<br/>@n3ary/gtfs-adapter-cluj-napoca/ingest"]
+  ingest["ingestBuild<br/>(outputDir, buildDate, secrets: TRANZY_API_KEY)"]
+  seed["Transitous seed load"]
+  tranzy["Tranzy fetch<br/>X-AGENCY-ID: 2"]
+  csv["CTP CSV scrape<br/>live, on demand"]
+  emit["reconcile + emit<br/>via @n3ary/gtfs-spec/serialize"]
+  zip["writeGtfsZip<br/>→ { zip, sizeBytes }"]
+  ext["makeSqlite + @n3ary/gtfs-adapter-cluj-napoca/static"]
+  r2["Cloudflare R2<br/>neary-gtfs/feeds.json"]
 
-# Sign up at https://tranzy.dev/accounts and put the key in .env
-cp .env.example .env
-$EDITOR .env
-
-# Build the feed
-npm run build
-
-# Validate the produced zip
-npm run validate
-
-# Or just dry-run the reconciliation (no zip written)
-npm run reconcile:dry
+  cron --> static
+  static --> acquire
+  acquire --> dyn
+  dyn --> ingest
+  ingest --> seed
+  ingest --> tranzy
+  ingest --> csv
+  seed --> emit
+  tranzy --> emit
+  csv --> emit
+  emit --> zip
+  zip --> static
+  static --> ext
+  ext --> r2
 ```
 
-Output goes to `output/cluj-napoca.gtfs.zip`.
-
-## Stack
-
-- **Node 24+** ESM (matching `neary-gtfs`)
-- Zero runtime dependencies except `archiver` (zip writer)
-- Vitest for tests
-- Vendored shared libs from `neary-gtfs` (seed.js, timing.js, csv.js, polyline.js) — same code, attribution headers preserved
+The canonical publish lives in `n3ary/gtfs-publisher`. Consumers reach this
+adapter's output exclusively through R2 — see its `daily.yml` for the cron.
 
 ## Project layout
 
-```
-src/
-├── cli.js              # entry point: build / validate / reconcile
-├── gtfs.js             # zip writer + minimal zip-name peek for validate
-├── lib/                # vendored pure helpers
-│   ├── seed.js
-│   ├── timing.js
-│   ├── csv.js
-│   └── polyline.js
-├── sources/
-│   ├── transitous.js   # seed fetcher + pattern extraction
-│   ├── tranzy.js       # Node port of the ctp-gtfs-adapter's Python client
-│   └── ctp-csv.js      # ctpcj.ro scraper + parser
-└── reconcile/
-    ├── index.js        # orchestrator
-    ├── routes.js
-    ├── stops.js
-    ├── shapes.js
-    ├── patterns.js     # seed → Tranzy fallback per (route, dir)
-    ├── trips.js        # CSV × patterns → trips.txt + stop_times.txt
-    ├── calendar.js
-    └── data-quality.js # warnings for #14, #15, M26, M26N, etc.
-
-tests/                  # vitest, fixtures are canned (no network)
-docs/                   # reference material — see docs/README.md
+```text
+adapters/cluj-napoca/
+├── src/
+│   ├── ingest/index.ts          # runtime entry point — ingestBuild(opts)
+│   ├── static/                  # sqlite extension (route colors, _neary_config)
+│   ├── rt/                      # GTFS-RT quirk for the CTP live feed
+│   ├── assemble/                # merge / derive / emit / check
+│   │   ├── merge/               #   routes, stops, shapes
+│   │   ├── derive/              #   patterns, calendar, frequencies
+│   │   ├── emit/                #   trips, networks, tranzy-fallback
+│   │   └── check/data-quality.ts
+│   ├── sources/
+│   │   ├── transitous/          #   seed zip loader + transform
+│   │   ├── tranzy/              #   REST client + transform
+│   │   └── ctp-csv/             #   live scrape + parser
+│   ├── lib/                     # pure helpers (seed.ts, timing.ts, polyline.ts, log-severity.ts)
+│   ├── gtfs.ts                  # output writer (.gtfs.zip)
+│   └── verify-trip-id-format.ts # CLI: trip-id _HHMM suffix regression check
+├── tests/                       # 164 tests, vitest, canned fixtures
+├── docs/                        # architecture, assemble-rules, known-limitations
+└── package.json                 # @n3ary/gtfs-adapter-cluj-napoca
 ```
 
-## Why a separate repo?
+## Local development
 
-CTP's three data sources each have a missing piece: Transitous is
-sometimes weeks stale, Tranzy has no `arrival_time`, CTP doesn't publish
-CSVs for ~63 of ~300 routes. Combining them in a single repo lets us:
+```bash
+pnpm install                # uses pnpm-workspace.yaml trustPolicy: no-fallback
+pnpm build                  # tsc -p tsconfig.build.json → dist/
+pnpm test                   # 164 tests, vitest
+pnpm check                  # tsc --noEmit + tsc.test --noEmit
+pnpm smoke:trip-ids         # self-check every emitted trip_id ends in _HHMM
+```
 
-- Hold the Tranzy API key in one place (GitHub Actions repo secret),
-  no leakage to `neary-gtfs` or `neary` (per `neary#108`, `neary-gtfs#16`).
-- React to upstream changes in any single source without breaking the
-  consumer (`neary-gtfs`).
-- Eventually submit the reconciled feed to MobilityDatabase /
-  Transitland so other apps benefit from the same freshness.
+`pnpm smoke:trip-ids` runs `src/verify-trip-id-format.ts`. The adapter has no
+network credentials of its own — secrets are passed in by the orchestrator via
+`ingestBuild({ secrets: { TRANZY_API_KEY } })`.
 
 ## Known limitations
 
-See [`docs/known-limitations.md`](./docs/known-limitations.md) for the
-full list. The big ones:
-
-- Calendar is synthesized from the CSV keys we actually scraped; not
+See [`docs/known-limitations.md`](./docs/known-limitations.md). Headline items:
+- Calendar is synthesized from the CSV service keys we actually scraped; not
   aligned with CTP's published service calendar.
-- `cluj-rt-feed.gtfs.ro` GTFS-RT trip-ID parity is a contract, not
-  verified automatically — if the upstream RT feed changes format, our
-  JOINs break silently.
-- Routes without a CSV *and* without a Transitous or Tranzy pattern
-  emit zero trips. See [`docs/known-limitations.md` §2](./docs/known-limitations.md#2-routes-without-csv-data-fall-back-to-the-potentially-stale-seed)
-  for the taxonomy (school transport, suspended, event routes, etc.).
+- Trip IDs are not contract-bound to `cluj-rt-feed.gtfs.ro` GTFS-RT — `neary`'s
+  reconcile keys on `(routeId, directionId, tripStartMin)`. The trip-id
+  `_HHMM` suffix regression check is internal-only.
+- Routes with neither a CSV nor a Tranzy/Transitous pattern emit zero trips.
 
 ## Documentation conventions
 
-All `*.md` files in this repo follow
+All `*.md` files follow
 [GitHub's alerts standard](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts)
 for callouts — **not** plain blockquotes. Use the right type for the
 semantics:
@@ -136,50 +134,15 @@ A multi-line alert looks like this:
 Plain `>` blockquotes are reserved for actual quoted material (e.g.
 a verbatim citation from another project's code or docs).
 
-## Deployment
+## Diagrams
 
-This adapter's runtime is driven by the
-[`gtfs-publisher`](https://github.com/n3ary/gtfs-publisher)
-orchestrator. Daily flow:
-
-```
-gtfs-publisher cron (00:30 UTC)
-  → packages/gtfs-static pipeline (`node dist/cli.js`)
-    → acquireGtfsAdapter('cluj-napoca', '@n3ary/gtfs-adapter-cluj-napoca')
-      → dynamic-import @n3ary/gtfs-adapter-cluj-napoca/ingest
-        → ingestBuild({ outputDir, buildDate, secrets: { TRANZY_API_KEY } })
-          → Transitous seed load
-          → Tranzy fetch (X-AGENCY-ID: 2)
-          → CTP CSV scrape (live, on demand)
-          → reconcile + emit via @n3ary/gtfs-spec/serialize
-          → writeGtfsZip → return { zip, sizeBytes }
-      ← bytes
-    → deriveBbox + makeSqlite (+ @n3ary/gtfs-adapter-cluj-napoca/static extension)
-    → publish zip + sqlite to Cloudflare R2 + update feeds.json
-```
-
-Downstream consumers (`neary` PWA, anyone reading `feeds.json`) reach
-this adapter's output exclusively through R2 — there is **no longer
-a `binaries` branch or GitHub raw URL**. See `docs/architecture.md`
-for the full picture and `n3ary/gtfs-publisher`'s `daily.yml` for the
-canonical cron.
-
-Requires a `TRANZY_API_KEY` secret at the orchestrator level (set on
-the `gtfs-publisher` repo). This adapter doesn't read any secrets
-directly — they're passed in via `ingestBuild({ secrets })`.
-
-Local development:
-
-```bash
-pnpm build
-pnpm test          # 164 tests, ~16s
-pnpm smoke:trip-ids  # self-check trip_id ends in _HHMM
-```
+Use [Mermaid](https://mermaid.js.org/) — not ASCII art. ASCII boxes drift
+on rendering and break search/diff.
 
 ## Contributing
 
 `main` is protected — every change goes through a PR. See
-[docs/standards/version-management.md](docs/standards/version-management.md)
+[`docs/standards/version-management.md`](docs/standards/version-management.md)
 for the bump-on-PR rule. PRs trigger
 [`.github/workflows/pr-validation.yml`](.github/workflows/pr-validation.yml)
 which runs `check` + `test`. Merging to `main` triggers
@@ -192,18 +155,10 @@ Branch protection on `main`:
 - No force-push, no branch deletion
 - **Require branches to be up to date** (so the version sequencing can't race)
 
-### CI smoke tests
-
-| Step | What it does | Fails the build when |
-|---|---|---|
-| `npm test` | Vitest unit + reconciliation tests with canned fixtures | any test fails |
-| `npm run fetch:csv` | Scrapes every CTP CSV (full network), parses each through the production parser | any cell is unrecognized (i.e. the `#15` fix needs extending) |
-| `npm run smoke:trip-ids` | Self-check on `trips.txt` from our built zip: every trip_id ends in `_HHMM` (so `neary`'s `parseLiveStartMin` fallback can extract the start time) | accidental format regression in `makeTripId()` |
-
 ## License
 
-MIT — see [LICENSE](./LICENSE). Schedule data © CTP Cluj-Napoca;
-this software is a personal transit data tool, not affiliated with CTP.
-## License
-
-[PolyForm Noncommercial License 1.0.0](./LICENSE) — free for individuals, hobbyists, education, research, and charitable organizations. Any commercial use (paid products, paid services, or hosted services for revenue) needs a separate license from the author. See the LICENSE file for the full terms.
+[PolyForm Noncommercial License 1.0.0](./LICENSE) — free for individuals,
+hobbyists, education, research, and charitable organizations. Any commercial
+use (paid products, paid services, or hosted services for revenue) needs a
+separate license from the author. Schedule data © CTP Cluj-Napoca; this
+software is a personal transit data tool, not affiliated with CTP.
