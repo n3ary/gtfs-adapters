@@ -255,12 +255,22 @@ function ensureAgencyTimezone(seedAgencyTxt, tz) {
   const header = lines[0].split(',').map((h) => h.trim());
   const tzIdx = header.indexOf('agency_timezone');
   if (tzIdx === -1) return seedAgencyTxt;
-  const dataLines = lines.slice(1).map((line) => {
-    const cols = line.split(',');
-    while (cols.length < header.length) cols.push('');
-    cols[tzIdx] = tz;
-    return cols.join(',');
-  });
+  // Filter out blank lines (the seed CSV almost always ends with a
+  // trailing \n, which splits to an empty string at lines[lines.length-1]).
+  // Without this, the empty line gets padded with empty cells up to
+  // `header.length`, then has agency_timezone overwritten — yielding a
+  // row like `,,,Europe/Bucharest,,,` that SQLite's NOT NULL +
+  // PRIMARY KEY on agency_id would reject. The PR #84 hardening in
+  // the orchestrator (CHECK + FK constraints, hard-fail INSERT) makes
+  // this bug loud; before that, INSERT OR IGNORE silently dropped it.
+  const dataLines = lines.slice(1)
+    .filter((line) => line.trim().length > 0)
+    .map((line) => {
+      const cols = line.split(',');
+      while (cols.length < header.length) cols.push('');
+      cols[tzIdx] = tz;
+      return cols.join(',');
+    });
   return [lines[0], ...dataLines].join('\n');
 }
 

@@ -42,6 +42,28 @@ describe('reconcile', () => {
     expect(files['feed_info.txt']).toBeTruthy();
   });
 
+  it('emits agency.txt without trailing-blank rows (orchestrator CHECK + FK invariants)', async () => {
+    // Regression for the daily-cron bug PR #84 surfaced: the seed
+    // CSV ends with a trailing `\n`, so `seed.agencyTxt.split('\n')`
+    // yielded an empty string as the last element. The pre-fix
+    // ensureAgencyTimezone() processed that empty line by padding
+    // it up to `header.length` columns and overwriting the timezone
+    // column — producing a row like `,,,Europe/Bucharest,,,`. That
+    // row had empty agency_id (PK violation) and empty agency_name
+    // (NOT NULL violation) under the new spec DDL constraints. Before
+    // the constraints, INSERT OR IGNORE silently dropped it.
+    const { files } = await reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
+    const lines = files['agency.txt']!.split('\n').filter((l) => l.trim().length > 0);
+    // 1 header + ≥1 data row, NO empty trailing row.
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+    // Every data row must have a non-empty agency_name (column 1).
+    for (const line of lines.slice(1)) {
+      const cols = line.split(',');
+      expect(cols[1], `row has empty agency_name: ${JSON.stringify(line)}`).toBeTruthy();
+      expect(cols[1].length).toBeGreaterThan(0);
+    }
+  });
+
   it('route 22 from Tranzy (orange, neary-gtfs#14) is included with its Tranzy color', async () => {
     // Non-black Tranzy colors are passed through unchanged; only black /
     // missing values get substituted with the per-type modal color.
