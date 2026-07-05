@@ -103,24 +103,34 @@ function formatCoord(n) {
 
 export function stopsToTxt(stops) {
   // Use the canonical stops.txt column list from the shared spec.
-  // Object.keys(StopsRowSchema.shape) gives the spec-defined columns
+  // Object.keys(StopRowSchema.shape) gives the spec-defined columns
   // in reference order. .passthrough() means the schema accepts
   // extras; this list does not, which is correct for the output zip.
+  //
+  // CRITICAL: column POSITIONS must match the header order, otherwise
+  // consumers that read by header name (e.g. the orchestrator's
+  // deriveBbox()) will see empty values. Earlier versions of this
+  // function emitted values shifted by one column, leaving the actual
+  // `stop_lat` column empty and causing the daily cron to fail with
+  // "no stops with valid coordinates".
   const headers = Object.keys(StopRowSchema.shape);
   const lines = [headers.join(',')];
   for (const s of stops) {
     lines.push([
-      csvField(s.stop_id),
-      csvField(s.stop_code ?? ''),
-      csvField(s.stop_name ?? ''),
-      '',
-      csvField(s.stop_lat),
-      csvField(s.stop_lon),
-      '', '', '',
-      csvField(s.location_type ?? '0'),
-      csvField(s.parent_station ?? ''),
-      '',
-      csvField(s.wheelchair_boarding ?? ''),
+      csvField(s.stop_id),                              // stop_id
+      csvField(s.stop_code ?? ''),                      // stop_code
+      csvField(s.stop_name ?? ''),                      // stop_name
+      csvField(s.stop_lat),                             // stop_lat  ← FIX: was ''
+      csvField(s.stop_lon),                             // stop_lon  ← FIX: shifted
+      '',                                                // stop_lat_lon_present (always empty — phantom field, not real GTFS)
+      '',                                                // zone_id
+      '',                                                // stop_url
+      csvField(s.location_type ?? '0'),                 // location_type
+      csvField(s.parent_station ?? ''),                 // parent_station
+      '',                                                // stop_timezone
+      csvField(s.wheelchair_boarding ?? ''),            // wheelchair_boarding
+      '',                                                // level_id
+      '',                                                // platform_code
     ].join(','));
   }
   return lines.join('\n') + '\n';
