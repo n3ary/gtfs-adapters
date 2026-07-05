@@ -9,7 +9,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import {
   staticExtension,
   applyStaticPostLoad,
-} from '../../src/static/index';
+} from '../../src/static/index.ts';
 import { SCHEMA } from '@n3ary/gtfs-spec/sql';
 
 /**

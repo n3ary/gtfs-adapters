@@ -1,8 +1,8 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity.
 import { describe, it, expect } from 'vitest';
 
-import { parseCtpCsv, fetchCtpCsv, fetchAllCsvSchedules } from '../src/sources/ctp-csv/index';
-import { fixtures } from './fixtures/index';
+import { parseCtpCsv, fetchCtpCsv, fetchAllCsvSchedules } from '../src/sources/ctp-csv/index.ts';
+import { fixtures } from './fixtures/index.ts';
 
 describe('parseCtpCsv', () => {
   it('parses a standard weekday CSV', () => {

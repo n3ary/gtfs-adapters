@@ -6,7 +6,7 @@
 
 import { createWriteStream } from 'node:fs';
 import { ZipArchive } from 'archiver';
-import { fixtures } from './index';
+import { fixtures } from './index.ts';
 
 export async function buildFixtureSeedZip(outPath) {
   return new Promise((resolve, reject) => {

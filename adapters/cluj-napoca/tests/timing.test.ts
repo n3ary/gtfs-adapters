@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { pickSpeedBucket, computeStopTimes } from '../src/lib/timing';
+import { pickSpeedBucket, computeStopTimes } from '../src/lib/timing.ts';
 
 const TIMING = {
   speedKmh: { peak: 14, offpeak: 22, night: 28 },

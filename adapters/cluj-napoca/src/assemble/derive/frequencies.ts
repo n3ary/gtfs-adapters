@@ -26,9 +26,9 @@ import { type StopTimeRow, type ShapeRow } from '@n3ary/gtfs-spec/spec';
  * warning.
  */
 
-import { computeStopTimes } from '../../lib/timing';
-import { info, warnMsg } from '../../lib/log-severity';
-import { canonicalShortName } from '../../sources/ctp-csv/shortname-aliases';
+import { computeStopTimes } from '../../lib/timing.ts';
+import { info, warnMsg } from '../../lib/log-severity.ts';
+import { canonicalShortName } from '../../sources/ctp-csv/shortname-aliases.ts';
 
 const DEFAULT_WINDOW = { start: '05:00', end: '23:00' };
 const DEFAULT_HEADWAY_SEC = 900; // 15 min — urban bus default

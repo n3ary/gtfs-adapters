@@ -47,7 +47,7 @@ import { type RouteRow } from '@n3ary/gtfs-spec/spec';
  * See `docs/assemble-rules.md` priority table for the rationale.
  */
 
-import { info, warnMsg } from '../../lib/log-severity';
+import { info, warnMsg } from '../../lib/log-severity.ts';
 
 /**
  * @typedef {{

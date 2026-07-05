@@ -21,7 +21,7 @@ import { ShapeRowSchema, type ShapeRow } from '@n3ary/gtfs-spec/spec';
  * We group by shape_id and emit rows ordered by sequence.
  */
 
-import { info } from '../../lib/log-severity';
+import { info } from '../../lib/log-severity.ts';
 
 export function reconcileShapes({ seed, tranzy, warnings }) {
   /** @type {Map<string, Array<{lat:number, lon:number, dist?:number}>>} */

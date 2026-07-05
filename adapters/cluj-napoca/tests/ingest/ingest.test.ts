@@ -78,7 +78,7 @@ vi.mock('../../src/sources/ctp-csv/index.ts', async (importOriginal) => {
   };
 });
 
-import { ingestBuild } from '../../src/ingest/index';
+import { ingestBuild } from '../../src/ingest/index.ts';
 
 const WORK = join(tmpdir(), `cluj-ingest-${Date.now()}`);
 

@@ -1,7 +1,7 @@
 // @ts-nocheck - tests use many `routes.find(...)!` patterns; full strict typing is a follow-up.
 import { describe, it, expect } from 'vitest';
 
-import { reconcileRoutes, routesToTxt } from '../src/assemble/merge/routes';
+import { reconcileRoutes, routesToTxt } from '../src/assemble/merge/routes.ts';
 
 /** Minimal seed object shape consumed by reconcileRoutes. */
 function seedOf(routes) {

@@ -7,7 +7,7 @@ import {
   rotateHueOklch,
   oklabDistance,
   resolveRouteColors,
-} from '../../src/static/route-colors';
+} from '../../src/static/route-colors.ts';
 
 describe('normalizeColor', () => {
   it('expands 3-char hex to 6-char uppercase', () => {

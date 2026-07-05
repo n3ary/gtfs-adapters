@@ -13,14 +13,14 @@
  * so callers can mix-and-match data sources.
  */
 
-import { USER_AGENT } from '../../lib/seed';
-import { warnMsg } from '../../lib/log-severity';
-import { readCsvBody, readStatusManifest } from '../../lib/build-input';
-import { TRANZY_TO_CTP_SHORTNAME, canonicalShortName } from './shortname-aliases';
-import { parseCtpCsv } from './parser';
+import { USER_AGENT } from '../../lib/seed.ts';
+import { warnMsg } from '../../lib/log-severity.ts';
+import { readCsvBody, readStatusManifest } from '../../lib/build-input.ts';
+import { TRANZY_TO_CTP_SHORTNAME, canonicalShortName } from './shortname-aliases.ts';
+import { parseCtpCsv } from './parser.ts';
 
-export { parseCtpCsv, classifyCell } from './parser';
-export { TRANZY_TO_CTP_SHORTNAME, canonicalShortName } from './shortname-aliases';
+export { parseCtpCsv, classifyCell } from './parser.ts';
+export { TRANZY_TO_CTP_SHORTNAME, canonicalShortName } from './shortname-aliases.ts';
 
 const DEFAULT_BASE_URL = 'https://ctpcj.ro/orare/csv/orar_{routeShortName}_{serviceId}.csv';
 

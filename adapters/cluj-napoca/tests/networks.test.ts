@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { buildNetworks, formatNetworkUsageSummary } from '../src/assemble/emit/networks';
+import { buildNetworks, formatNetworkUsageSummary } from '../src/assemble/emit/networks.ts';
 
 describe('buildNetworks — networks.txt + route_networks.txt', () => {
   it('emits networks.txt with only the categories actually used', () => {

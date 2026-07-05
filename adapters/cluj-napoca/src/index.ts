@@ -12,5 +12,5 @@
  *   @n3ary/gtfs-adapter-cluj-napoca/rt       → ./rt (RT quirks for gtfs-rt)
  */
 
-export * from './static/index';
-export * from './rt/index';
+export * from './static/index.ts';
+export * from './rt/index.ts';

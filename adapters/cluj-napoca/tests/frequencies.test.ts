@@ -10,10 +10,10 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { reconcile } from '../src/assemble/index';
-import { parseCtpCsv } from '../src/sources/ctp-csv/index';
-import { fixtures } from './fixtures/index';
-import { buildFixtureSeedMemory } from './fixtures/seed-builder';
+import { reconcile } from '../src/assemble/index.ts';
+import { parseCtpCsv } from '../src/sources/ctp-csv/index.ts';
+import { fixtures } from './fixtures/index.ts';
+import { buildFixtureSeedMemory } from './fixtures/seed-builder.ts';
 
 function buildCsvByRouteService() {
   const out = new Map();

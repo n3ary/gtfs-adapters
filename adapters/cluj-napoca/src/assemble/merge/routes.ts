@@ -25,8 +25,8 @@ import { RouteRowSchema, type RouteRow } from '@n3ary/gtfs-spec/spec';
  * See `docs/assemble-rules.md` for the priority table.
  */
 
-import { info } from '../../lib/log-severity';
-import { canonicalShortName } from '../../sources/ctp-csv/shortname-aliases';
+import { info } from '../../lib/log-severity.ts';
+import { canonicalShortName } from '../../sources/ctp-csv/shortname-aliases.ts';
 
 /**
  * Normalize a color value to the GTFS-spec `Color` type: six-digit hex,

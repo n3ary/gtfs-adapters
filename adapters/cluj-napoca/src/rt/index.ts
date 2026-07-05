@@ -6,8 +6,8 @@
  * call; we hand it a function that returns our quirk for the
  * `cluj-napoca` feed and undefined for everything else.
  */
-import { clujRtQuirk, parseClujTripId } from './cluj';
-import type { ClujQuirk } from './cluj';
+import { clujRtQuirk, parseClujTripId } from './cluj.ts';
+import type { ClujQuirk } from './cluj.ts';
 
 export { clujRtQuirk, parseClujTripId };
 export type { ClujQuirk };

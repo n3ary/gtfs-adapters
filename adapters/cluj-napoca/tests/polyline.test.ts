@@ -10,7 +10,7 @@ import {
   haversineMeters,
   projectOnPolyline,
   cumulativeShapeDistances,
-} from '../src/lib/polyline';
+} from '../src/lib/polyline.ts';
 
 /** Roughly Cluj-Napoca latitude; 0.01° lon ≈ 760 m. */
 const LAT = 46.77;

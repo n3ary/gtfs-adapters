@@ -9,7 +9,7 @@ import {
   deriveLongNameFromStops,
   applyRouteCategory,
   getAllCategories,
-} from '../src/assemble/merge/routeCategory';
+} from '../src/assemble/merge/routeCategory.ts';
 
 describe('classifyRoute — pattern → category', () => {
   // classifyRoute returns an array (1:many) — empty for regular urban.
