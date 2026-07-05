@@ -129,7 +129,7 @@ jobs:
             ADAPTERS_JSON=$(echo "$ADAPTERS" \
               | tr ' ' '\n' \
               | jq -R '. as $a | select($a != "")' \
-              | jq -s '.')
+              | jq -sc '.')
             echo "list=${ADAPTERS_JSON}" >> "$GITHUB_OUTPUT"
           fi
           echo "force_version=${FORCE_VERSION}" >> "$GITHUB_OUTPUT"
