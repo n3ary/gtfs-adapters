@@ -14,7 +14,7 @@
  * Catalog: `ro_Cluj-Napoca` → mdb-2121 (Mobility Database mirror)
  */
 
-import { loadSeed } from '../../lib/seed';
+import { loadSeed } from '../../lib/seed.ts';
 
 const DEFAULT_SEED_URL = 'https://api.transitous.org/gtfs/ro_Cluj-Napoca.gtfs.zip';
 

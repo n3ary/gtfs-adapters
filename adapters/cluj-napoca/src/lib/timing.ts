@@ -29,7 +29,7 @@
  * MIT, Marius Ciotlos.
  */
 
-import { cumulativeShapeDistances } from './polyline';
+import { cumulativeShapeDistances } from './polyline.ts';
 
 /** Parse "HH:MM" or "HH:MM:SS" into minutes since midnight. */
 function hhmmToMin(hhmm) {

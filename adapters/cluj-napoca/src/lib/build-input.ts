@@ -32,7 +32,7 @@
 
 import { mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync, renameSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { canonicalShortName } from '../sources/ctp-csv/shortname-aliases';
+import { canonicalShortName } from '../sources/ctp-csv/shortname-aliases.ts';
 
 /** Root of the build-input layout. */
 export const BUILD_INPUT_DIR = '.build-input';

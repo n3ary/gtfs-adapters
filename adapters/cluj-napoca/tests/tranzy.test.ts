@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { TranzyClient, TranzyAuthError, TranzyRateLimitError, TranzyError } from '../src/sources/tranzy/index';
+import { TranzyClient, TranzyAuthError, TranzyRateLimitError, TranzyError } from '../src/sources/tranzy/index.ts';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

@@ -27,7 +27,7 @@ import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-import { parseRoutes, parseStops, parseTrips, parseStopTimesStream, parseShapes } from '@n3ary/gtfs-spec/spec';
+import { parseRoutes, parseStops, parseTrips, parseStopTimesStream, parseShapesStream } from '@n3ary/gtfs-spec/spec';
 
 const REQUIRED = ['agency.txt', 'routes.txt', 'stops.txt', 'trips.txt', 'stop_times.txt'];
 const OPTIONAL = ['shapes.txt', 'calendar.txt', 'calendar_dates.txt', 'feed_info.txt'];
@@ -74,9 +74,13 @@ export async function loadSeed(source, opts = {}) {
   }
 
   const agencyTxt = readFileSync(join(seedDir, 'agency.txt'), 'utf8');
-  const routesRows = parseRoutes(readFileSync(join(seedDir, 'routes.txt'), 'utf8'));
-  const stopsRows = parseStops(readFileSync(join(seedDir, 'stops.txt'), 'utf8'));
-  const tripsRows = parseTrips(readFileSync(join(seedDir, 'trips.txt'), 'utf8'));
+  // parseRoutes/Stops/Trips return Promises (see @n3ary/gtfs-spec/src/spec).
+  // await them before using the arrays.
+  const [routesRows, stopsRows, tripsRows] = await Promise.all([
+    parseRoutes(readFileSync(join(seedDir, 'routes.txt'), 'utf8')),
+    parseStops(readFileSync(join(seedDir, 'stops.txt'), 'utf8')),
+    parseTrips(readFileSync(join(seedDir, 'trips.txt'), 'utf8')),
+  ]);
   // stop_times.txt routinely exceeds 500 MB on national feeds; use the
   // streaming reader and collect into the trip_id-keyed map directly.
   const stopTimes = new Map();
@@ -100,12 +104,17 @@ export async function loadSeed(source, opts = {}) {
   // mirror always ships it. When present we group it by shape_id so
   // the reconciliation step can project each trip's stops onto its
   // polyline (replaces straight-line haversine for stop-to-stop distance).
+  // Use the streaming parser: shapes.txt routinely exceeds Node's
+  // ~512 MB v8 string limit on national feeds.
   let shapesById = new Map();
   try {
     statSync(join(seedDir, 'shapes.txt'));
-    const shapesRows = parseShapes(readFileSync(join(seedDir, 'shapes.txt'), 'utf8'));
     const byId = new Map();
-    for (const row of shapesRows) {
+    for await (const row of parseShapesStream(
+      (async function* () {
+        yield readFileSync(join(seedDir, 'shapes.txt'), 'utf8');
+      })(),
+    )) {
       if (!row.shape_id) continue;
       const lat = parseFloat(row.shape_pt_lat);
       const lon = parseFloat(row.shape_pt_lon);

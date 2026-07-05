@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import GtfsRealtimeBindings from 'gtfs-realtime-bindings';
-import { clujRtQuirk, parseClujTripId } from './cluj';
+import { clujRtQuirk, parseClujTripId } from './cluj.ts';
 
 function makeEntity(tripId: string, directionId: number, startTime: string) {
   return GtfsRealtimeBindings.transit_realtime.FeedEntity.create({

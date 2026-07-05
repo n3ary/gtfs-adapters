@@ -16,7 +16,7 @@
  *   - `stops[]`: ordered stop list
  */
 
-import { seedPatternsByRouteDir } from '../../sources/transitous/index';
+import { seedPatternsByRouteDir } from '../../sources/transitous/index.ts';
 
 /**
  * Build a per-(route, dir) pattern map from Tranzy. Tranzy organizes

@@ -29,12 +29,12 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
 
-import { TranzyClient } from './sources/tranzy/index';
-import { loadTransitousSeed } from './sources/transitous/index';
-import { fetchAllCsvSchedules, readCtpCsvFromDisk } from './sources/ctp-csv/index';
-import { reconcile } from './assemble/index';
-import { writeGtfsZip, validateGtfsZip } from './gtfs';
-import { statusManifestExists } from './lib/build-input';
+import { TranzyClient } from './sources/tranzy/index.ts';
+import { loadTransitousSeed } from './sources/transitous/index.ts';
+import { fetchAllCsvSchedules, readCtpCsvFromDisk } from './sources/ctp-csv/index.ts';
+import { reconcile } from './assemble/index.ts';
+import { writeGtfsZip, validateGtfsZip } from './gtfs.ts';
+import { statusManifestExists } from './lib/build-input.ts';
 
 const USAGE = `cluj-napoca-gtfs-adapter — build a reconciled GTFS feed for Cluj-Napoca
 

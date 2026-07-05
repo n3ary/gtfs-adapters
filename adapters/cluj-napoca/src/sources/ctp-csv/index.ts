@@ -3,7 +3,7 @@
  *
  * Re-exports the public API. Consumers should import from this folder:
  *
- *   import { fetchCtpCsv, parseCtpCsv, buildCtpCsvUrl, ... } from '../sources/ctp-csv/index';
+ *   import { fetchCtpCsv, parseCtpCsv, buildCtpCsvUrl, ... } from '../sources/ctp-csv/index.ts';
  *
  * For tests, swap the client by importing `./client.js` directly and
  * feeding raw CSV bodies into `./parser.js`.
@@ -25,4 +25,4 @@ export {
   // parser (re-exported for convenience)
   parseCtpCsv,
   classifyCell,
-} from './client';
+} from './client.ts';

@@ -40,12 +40,12 @@
 
 import { argv, env, exit } from 'node:process';
 
-import { loadTransitousSeed } from '../src/sources/transitous/index';
-import { TranzyClient } from '../src/sources/tranzy/index';
-import { parseCtpCsv, buildCtpCsvUrl, CSV_SERVICE_KEYS } from '../src/sources/ctp-csv/index';
-import { canonicalShortName } from '../src/sources/ctp-csv/shortname-aliases';
-import { USER_AGENT } from '../src/lib/seed';
-import { ensureBuildInputDirs, writeCsvBody, writeStatusManifest } from '../src/lib/build-input';
+import { loadTransitousSeed } from '../src/sources/transitous/index.ts';
+import { TranzyClient } from '../src/sources/tranzy/index.ts';
+import { parseCtpCsv, buildCtpCsvUrl, CSV_SERVICE_KEYS } from '../src/sources/ctp-csv/index.ts';
+import { canonicalShortName } from '../src/sources/ctp-csv/shortname-aliases.ts';
+import { USER_AGENT } from '../src/lib/seed.ts';
+import { ensureBuildInputDirs, writeCsvBody, writeStatusManifest } from '../src/lib/build-input.ts';
 
 const DEFAULT_TRANSITOUS_URL = 'https://api.transitous.org/gtfs/ro_Cluj-Napoca.gtfs.zip';
 const DEFAULT_CSV_BASE = 'https://ctpcj.ro/orare/csv/orar_{routeShortName}_{serviceId}.csv';

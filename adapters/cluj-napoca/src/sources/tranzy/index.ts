@@ -13,11 +13,11 @@
  * `./client.js` directly and feeding raw arrays into `./transform.js`.
  */
 
-export { TranzyClient, TranzyError, TranzyAuthError, TranzyRateLimitError } from './client';
-export { transformTranzyData } from './transform';
+export { TranzyClient, TranzyError, TranzyAuthError, TranzyRateLimitError } from './client.ts';
+export { transformTranzyData } from './transform.ts';
 
-import { TranzyClient } from './client';
-import { transformTranzyData } from './transform';
+import { TranzyClient } from './client.ts';
+import { transformTranzyData } from './transform.ts';
 
 /**
  * Fetch every Tranzy endpoint and transform into a GTFS-shaped structure.

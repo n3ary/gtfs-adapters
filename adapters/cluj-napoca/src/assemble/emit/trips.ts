@@ -15,9 +15,9 @@ import { TripRowSchema, StopTimeRowSchema, ShapeRowSchema, type TripRow, type St
  *   e.g. `45_1_LV_9_0721`  (route 45, dir 1, LV service, 9th departure, 07:21)
  */
 
-import { computeStopTimes } from '../../lib/timing';
-import { info, warnMsg } from '../../lib/log-severity';
-import { canonicalShortName } from '../../sources/ctp-csv/shortname-aliases';
+import { computeStopTimes } from '../../lib/timing.ts';
+import { info, warnMsg } from '../../lib/log-severity.ts';
+import { canonicalShortName } from '../../sources/ctp-csv/shortname-aliases.ts';
 
 const DEFAULT_TIMING = {
   speedKmh: { peak: 14, offpeak: 22, night: 28 },

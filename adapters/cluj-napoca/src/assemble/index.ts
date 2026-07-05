@@ -16,18 +16,18 @@
  * Returns everything the zip writer needs in `src/gtfs.js`.
  */
 
-import { reconcileRoutes, routesToTxt } from './merge/routes';
-import { reconcileStops, stopsToTxt } from './merge/stops';
-import { reconcileShapes, shapesToTxt } from './merge/shapes';
-import { reconcileTripsAndStopTimes, tripsToTxt, stopTimesToTxt } from './emit/trips';
-import { reconcileFrequencies, frequenciesToTxt } from './derive/frequencies';
-import { reconcileCalendar, calendarToTxt } from './derive/calendar';
-import { runDataQualityChecks } from './check/data-quality';
-import { tranzyPatternsByRouteDir, seedPatternsByRouteDir } from './derive/patterns';
-import { reconcileTranzyFallback } from './emit/tranzy-fallback';
-import { buildNetworks, formatNetworkUsageSummary } from './emit/networks';
-import { applyRouteCategory } from './merge/routeCategory';
-import { warnMsg, info } from '../lib/log-severity';
+import { reconcileRoutes, routesToTxt } from './merge/routes.ts';
+import { reconcileStops, stopsToTxt } from './merge/stops.ts';
+import { reconcileShapes, shapesToTxt } from './merge/shapes.ts';
+import { reconcileTripsAndStopTimes, tripsToTxt, stopTimesToTxt } from './emit/trips.ts';
+import { reconcileFrequencies, frequenciesToTxt } from './derive/frequencies.ts';
+import { reconcileCalendar, calendarToTxt } from './derive/calendar.ts';
+import { runDataQualityChecks } from './check/data-quality.ts';
+import { tranzyPatternsByRouteDir, seedPatternsByRouteDir } from './derive/patterns.ts';
+import { reconcileTranzyFallback } from './emit/tranzy-fallback.ts';
+import { buildNetworks, formatNetworkUsageSummary } from './emit/networks.ts';
+import { applyRouteCategory } from './merge/routeCategory.ts';
+import { warnMsg, info } from '../lib/log-severity.ts';
 
 /**
  * @param {{

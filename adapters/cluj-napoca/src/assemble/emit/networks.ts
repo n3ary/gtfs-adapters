@@ -30,7 +30,7 @@ import { type RouteRow } from '@n3ary/gtfs-spec/spec';
  * optional files from the published zip).
  */
 
-import { getAllCategories } from '../merge/routeCategory';
+import { getAllCategories } from '../merge/routeCategory.ts';
 
 /**
  * Build the CSV bodies for `networks.txt` and `route_networks.txt`.

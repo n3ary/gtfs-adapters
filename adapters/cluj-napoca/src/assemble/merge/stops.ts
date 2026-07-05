@@ -20,7 +20,7 @@ import { StopRowSchema } from '@n3ary/gtfs-spec/spec';
  * we never parse it as Number.
  */
 
-import { info, warnMsg } from '../../lib/log-severity';
+import { info, warnMsg } from '../../lib/log-severity.ts';
 
 export function reconcileStops({ seed, tranzy, warnings }) {
   /** @type {Map<string, any>} */

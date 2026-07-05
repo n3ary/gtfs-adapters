@@ -11,7 +11,7 @@
  *   5. CSV row count vs seed trip count divergence
  */
 
-import { info, warnMsg } from '../../lib/log-severity';
+import { info, warnMsg } from '../../lib/log-severity.ts';
 
 /**
  * @param {object} input

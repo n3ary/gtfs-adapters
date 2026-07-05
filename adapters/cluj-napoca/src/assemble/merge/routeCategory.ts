@@ -7,7 +7,7 @@ import { type RouteRow } from '@n3ary/gtfs-spec/spec';
  * to clean up Tranzy's messy `route_long_name` into start-end format.
  */
 
-import { terminalNamesMatch, normalizeStopName } from '../emit/trips';
+import { terminalNamesMatch, normalizeStopName } from '../emit/trips.ts';
 
 /**
  * The classifier runs once at assemble time; consumers (neary) just read

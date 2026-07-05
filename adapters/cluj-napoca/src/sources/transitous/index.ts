@@ -14,11 +14,11 @@
  * feeding raw seed arrays into `./transform.js`.
  */
 
-export { loadTransitousSeed, TRANSITOUS_SEED_URL } from './client';
-export { seedPatternsByRouteDir, transformTransitousSeed } from './transform';
+export { loadTransitousSeed, TRANSITOUS_SEED_URL } from './client.ts';
+export { seedPatternsByRouteDir, transformTransitousSeed } from './transform.ts';
 
-import { loadTransitousSeed } from './client';
-import { transformTransitousSeed } from './transform';
+import { loadTransitousSeed } from './client.ts';
+import { transformTransitousSeed } from './transform.ts';
 
 /**
  * Fetch the Transitous seed and transform into a stamped GTFS-shaped
