@@ -33,21 +33,29 @@ import { join } from 'node:path';
 import { TranzyClient } from '../sources/tranzy/index.ts';
 import { loadTransitousSeed } from '../sources/transitous/index.ts';
 import { fetchAllCsvSchedules, readCtpCsvFromDisk } from '../sources/ctp-csv/index.ts';
+import { CSV_SERVICE_KEYS } from '../sources/ctp-csv/client.ts';
 import { reconcile } from '../assemble/index.ts';
 import { writeGtfsZip } from '../gtfs.ts';
 
 /**
- * Options for the end-to-end feed build. Each field maps to an
- * upstream source — pass explicit config (not env), so the call site
- * owns secrets and is easy to test.
+ * CTP Cluj-Napoca defaults — single source of truth for cluj-specific
+ * constants that used to leak into the orchestrator as env vars.
+ * Override only when running against a non-production CTP feed
+ * (e.g. a smoke fixture).
+ */
+export const DEFAULT_AGENCY_ID = '2'; // Tranzy: CTP Cluj-Napoca
+export const DEFAULT_SERVICE_KEYS = CSV_SERVICE_KEYS; // ['lv', 's', 'd']
+
+/**
+ * Options for the end-to-end feed build. The orchestrator passes only
+ * the secret (`tranzy.apiKey`); static feed knowledge (agencyId,
+ * serviceKeys, rateLimitMs, calendarDays) lives here as defaults so
+ * the calling repo (`n3ary/gtfs`) stays feed-agnostic.
  *
  * `outputDir` is the staging directory the adapter writes the
  * intermediate build artifacts into (.build-input/csv/, .build-input/
  * csv-status.json, and the final .zip). The caller chooses where
  * — typically a workflow-scoped tmp dir; left behind for log/debug.
- *
- * `calendarDays` controls the `window` argument passed to the
- * calendar builder (default 180, matching the legacy CLI default).
  *
  * `buildDate` lets tests pin the clock; omit in production.
  */
@@ -56,14 +64,14 @@ export type IngestOptions = {
   outputName?: string;
   tranzy: {
     apiKey: string;
-    agencyId: string;
+    agencyId?: string;
     rateLimitMs?: number;
   };
-  transitous: {
+  transitous?: {
     seedUrl?: string;
   };
-  ctp: {
-    serviceKeys: string[];
+  ctp?: {
+    serviceKeys?: string[];
     fetchFn?: (routeShortName: string, serviceKey: string) => string;
   };
   calendarDays?: number;
@@ -103,16 +111,20 @@ export async function ingestBuild(opts: IngestOptions): Promise<IngestResult> {
   const calendarDays = opts.calendarDays ?? 180;
   const buildDate = opts.buildDate ?? new Date();
   const rateLimitMs = opts.tranzy.rateLimitMs ?? 500;
+  const agencyId = opts.tranzy.agencyId ?? DEFAULT_AGENCY_ID;
+  const serviceKeys = opts.ctp?.serviceKeys ?? DEFAULT_SERVICE_KEYS;
+  const seedUrl = opts.transitous?.seedUrl;
+  const fetchFn = opts.ctp?.fetchFn;
 
   mkdirSync(outputDir, { recursive: true });
 
   // 1. Transitous seed.
-  const seed = await loadTransitousSeed(opts.transitous.seedUrl ? { url: opts.transitous.seedUrl } : {});
+  const seed = await loadTransitousSeed(seedUrl ? { url: seedUrl } : {});
 
   // 2. Tranzy static (best-effort — fails soft).
   const tranzy = new TranzyClient({
     apiKey: opts.tranzy.apiKey,
-    agencyId: opts.tranzy.agencyId,
+    agencyId,
     rateLimitMs,
   });
   let tranzyData = null;
@@ -129,8 +141,8 @@ export async function ingestBuild(opts: IngestOptions): Promise<IngestResult> {
 
   // 3. CTP CSV (status >= 400 is fatal — surfaced by fetchAllCsvSchedules).
   const csv = await fetchAllCsvSchedules(seed.routes, {
-    loadFn: opts.ctp.fetchFn ?? readCtpCsvFromDisk,
-    serviceKeys: opts.ctp.serviceKeys,
+    loadFn: fetchFn ?? readCtpCsvFromDisk,
+    serviceKeys,
   });
   console.log(`[ctp-csv] scraped ${csv.byRouteService.size} routes`);
 

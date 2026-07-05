@@ -1,6 +1,10 @@
 {
   "name": "@n3ary/gtfs-adapter-cluj-napoca",
-  "version": "0.2.0",
+<<<<<<< HEAD
+  "version": "0.2.1",
+=======
+  "version": "0.2.1",
+>>>>>>> 7310a09 (feat(adapter): make cluj-static configs (agencyId, serviceKeys, transitous, ctp) optional with adapter-level defaults)
   "type": "module",
   "description": "Cluj-Napoca (CTP) GTFS adapter — per-feed knowledge for the n3ary family. Reconciles Transitous seed + Tranzy.ai + CTP CSV into a clean GTFS zip, registers RT quirks with the generic gtfs-rt proxy. See https://github.com/n3ary/gtfs-adapters.",
   "license": "PolyForm-Noncommercial-1.0.0",

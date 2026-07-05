@@ -11,25 +11,32 @@ import { tmpdir } from 'node:os';
 // orchestration in src/ingest/index.ts. The mocks use the existing
 // fixture data via the seed-builder helper, so the produced zip is
 // real (just synthesized sources, not live upstream fetches).
-vi.mock('../../src/sources/tranzy/index.ts', () => ({
-  TranzyClient: class {
-    constructor(opts) {
-      this.opts = opts;
-    }
-    async fetchAll() {
-      // Map to the fixtures.tranzy shape the rest of the codebase
-      // expects. Empty by default — drives the seed+CSV path.
-      return {
-        routes: [],
-        stops: [],
-        trips: [],
-        shapes: [],
-        stop_times: [],
-        warnings: [],
-      };
-    }
-  },
-}));
+//
+// `lastTranzyOpts` is exposed so the defaults-applied test below can
+// assert what the ingestBuild() function actually fed the constructor
+// (catches the "did the default really apply" regression where someone
+// removes the `?? DEFAULT_AGENCY_ID` fallback).
+vi.mock('../../src/sources/tranzy/index.ts', () => {
+  const state: { lastTranzyOpts: any } = { lastTranzyOpts: null };
+  return {
+    state,
+    TranzyClient: class {
+      constructor(opts: any) {
+        state.lastTranzyOpts = opts;
+      }
+      async fetchAll() {
+        return {
+          routes: [],
+          stops: [],
+          trips: [],
+          shapes: [],
+          stop_times: [],
+          warnings: [],
+        };
+      }
+    },
+  };
+});
 
 vi.mock('../../src/sources/transitous/index.ts', async (importOriginal) => {
   const mod = await importOriginal();
@@ -113,5 +120,30 @@ describe('ingestBuild', () => {
     // PK signature check — verify zip magic bytes.
     expect(result.zip[0]).toBe(0x50); // 'P'
     expect(result.zip[1]).toBe(0x4b); // 'K'
+  });
+
+  it('applies adapter-level defaults when agencyId/serviceKeys/rateLimitMs are omitted', async () => {
+    // The mock TranzyClient exposes the opts the ingestBuild()
+    // function actually fed it. Defaults must flow through — if a
+    // future refactor drops the `?? DEFAULT_AGENCY_ID` fallback,
+    // lastTranzyOpts.agencyId will be undefined and this test fails.
+    const { state } = await import('../../src/sources/tranzy/index.ts');
+    state.lastTranzyOpts = null;
+
+    const outDir = join(WORK, 'defaults');
+    const result = await ingestBuild({
+      outputDir: outDir,
+      // Note: no agencyId, no rateLimitMs.
+      tranzy: { apiKey: 'fake' },
+      // Note: no ctp block at all.
+      // Note: no transitous block at all.
+      // Note: no calendarDays, no buildDate.
+    });
+
+    expect(result.sizeBytes).toBeGreaterThan(0);
+    expect(state.lastTranzyOpts).not.toBeNull();
+    expect(state.lastTranzyOpts.agencyId).toBe('2'); // DEFAULT_AGENCY_ID
+    expect(state.lastTranzyOpts.rateLimitMs).toBe(500); // TranzyClient default
+    expect(state.lastTranzyOpts.apiKey).toBe('fake');
   });
 });
