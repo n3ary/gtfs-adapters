@@ -27,7 +27,7 @@ import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-import { parseRoutes, parseStops, parseTrips, parseStopTimesStream, parseShapes } from '@n3ary/gtfs-spec/spec';
+import { parseRoutes, parseStops, parseTrips, parseStopTimesStream, parseShapesStream } from '@n3ary/gtfs-spec/spec';
 
 const REQUIRED = ['agency.txt', 'routes.txt', 'stops.txt', 'trips.txt', 'stop_times.txt'];
 const OPTIONAL = ['shapes.txt', 'calendar.txt', 'calendar_dates.txt', 'feed_info.txt'];
@@ -100,12 +100,17 @@ export async function loadSeed(source, opts = {}) {
   // mirror always ships it. When present we group it by shape_id so
   // the reconciliation step can project each trip's stops onto its
   // polyline (replaces straight-line haversine for stop-to-stop distance).
+  // Use the streaming parser: shapes.txt routinely exceeds Node's
+  // ~512 MB v8 string limit on national feeds.
   let shapesById = new Map();
   try {
     statSync(join(seedDir, 'shapes.txt'));
-    const shapesRows = parseShapes(readFileSync(join(seedDir, 'shapes.txt'), 'utf8'));
     const byId = new Map();
-    for (const row of shapesRows) {
+    for await (const row of parseShapesStream(
+      (async function* () {
+        yield readFileSync(join(seedDir, 'shapes.txt'), 'utf8');
+      })(),
+    )) {
       if (!row.shape_id) continue;
       const lat = parseFloat(row.shape_pt_lat);
       const lon = parseFloat(row.shape_pt_lon);
