@@ -119,6 +119,12 @@ in haversine fallback. Log a warning per affected trip.
 **Fix:** nothing — the alternative is no schedule at all. Worth flagging
 to the consumer app so it can show "approximate times" rather than "live".
 
+**Status (2026-07):** this fallback now runs inside the orchestrator's
+`ingestBuild()` path — the warning surfaces in the daily cron's
+`reconcile` log. The local `cli.ts build` path that this doc originally
+described was retired when `gtfs-publisher` became the canonical
+build driver.
+
 ## 4. Calendar is synthesized from the CSV service keys we actually scraped
 
 **Source:** same as `neary-gtfs/feeds/cluj-napoca/build.js` lines 235–241.
@@ -147,8 +153,8 @@ do the same.
 `TRANZY_RATE_LIMIT_MS` is enforced via a "last-request timestamp" inside
 each `TranzyClient` instance. If two assembler invocations run in
 parallel, both can race past the throttle. For our usage we run one
-build per minute (CI cron), so this is fine. If you ever fan out,
-move throttling to a shared middleware.
+build per minute (orchestrator cron at 00:30 UTC), so this is fine.
+If you ever fan out, move throttling to a shared middleware.
 
 ## 7. The `agency.txt` timezone is hard-coded
 
@@ -160,6 +166,12 @@ override it unconditionally. The neary#87 spec calls for a build-time
 warning when a feed has multiple `agency.txt` rows with different
 timezones — we implement that check but do not act on it (single-agency
 feeds only).
+
+**Status (2026-07):** the orchestrator's `validate.ts` (Layer 1
+from PR #84 in `n3ary/gtfs-publisher`) now runs zip-level checks on
+adapter-driven feeds too. Cross-reference orphans (incl. services
+referenced by `trips.service_id` but missing from `calendar.txt`)
+are caught at build time and fail the daily cron loud.
 
 ## 8. ~~`cluj-rt-feed.gtfs.ro` trip-id parity is a contract, not verified~~ — RE-EXAMINED in v0.2
 
@@ -195,18 +207,55 @@ Trip-id format changed in v0.2: dropped the `seq` segment.
 | HHMM tail required | yes | yes |
 | CI check | asserted parity vs live RT feed | asserts our own output ends in `_HHMM` |
 
-Run the self-check locally after building:
+**Status (2026-07):** the script was renamed `verify-rt-parity.ts`
+→ `verify-trip-id-format.ts` (the old name was misleading — it's a
+self-check, not a parity check). Run locally after building:
 
 ```bash
-pnpm run build
-pnpm run smoke:trip-ids
+pnpm build
+pnpm smoke:trip-ids
 ```
 
-In CI, the step runs after `build` (so `output/cluj-napoca.gtfs.zip`
-exists). Failure prints up to 10 offending trip_ids and points at
-`makeTripId()` in `src/assemble/emit/trips.js` as the fix location.
+In CI the step runs in this repo's workflows (orchestrator cron calls
+`ingestBuild` directly, but local smoke runs and the published
+package's `verify-trip-id-format.ts` invocation remain the canonical
+trip-id format regression check).
 
 ## 9. README "limitations" section is the same as this doc
 
 Once the README is finalized, this doc becomes the long-form version.
 For now both exist and may drift.
+
+**Status (2026-07):** this entry is no longer accurate. The README
+now points at the orchestrator-driven build flow and references
+`docs/architecture.md` as the canonical description of how the
+adapter runs in production. The "what lives in neary-gtfs after
+this lands" section that was here previously is gone — the refactor
+landed.
+
+## 10. Canonical publish lives in `n3ary/gtfs-publisher` (not here)
+
+The orchestrator (`n3ary/gtfs-publisher`) is the canonical publisher
+of this adapter's output to Cloudflare R2 (`neary-gtfs/feeds.json`).
+The `neary` PWA reads from R2 — it does **not** read from a GitHub
+`binaries` branch anymore.
+
+Historically this repo published `output/cluj-napoca.gtfs.zip` to
+its own `binaries` branch via a daily CI (`npm run fetch:csv` →
+`node src/cli.js build`). That side channel is now retired:
+
+- The `binaries` branch no longer exists in this repo's remote refs
+  (last release removed the publish step).
+- The local two-phase pipeline (`scripts/fetch-stage.ts` populating
+  `.build-input/csv/`, then `cli.ts build` reading from disk) is
+  replaced by a single-phase `ingestBuild()` that fetches CSVs
+  live from CTP upstream.
+- `src/cli.ts`, `scripts/fetch-stage.ts`, `scripts/inspect-404s.ts`,
+  `src/lib/build-input.ts`, and the local `haversineMeters` copy in
+  `src/assemble/merge/shapes.ts` were all deleted in v0.3.3.
+  The standalone CLI is gone; `ingestBuild()` is the only runtime
+  entry point.
+
+Downstream consumers (`neary`, anyone reading `feeds.json`) reach
+this adapter's output exclusively through the orchestrator's R2
+publish — see `n3ary/gtfs-publisher`'s `daily.yml` for the cron.

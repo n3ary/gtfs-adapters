@@ -12,7 +12,6 @@
 export {
   // client
   fetchCtpCsv,
-  readCtpCsvFromDisk,
   fetchAllCsvSchedules,
   buildCtpCsvUrl,
   normalizeShortNameForCtpUrl,

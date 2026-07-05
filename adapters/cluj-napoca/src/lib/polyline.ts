@@ -1,96 +1,25 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 /**
- * polyline — pure geometry helpers for projecting points onto a GTFS
- * route shape and measuring cumulative distance along it.
+ * polyline — per-stop projection onto a GTFS route shape.
  *
- * Mirrors the runtime version in
- * neary/src/lib/domain/shapeProjection.ts; kept here as a separate
- * vendored copy because pipeline scripts are plain Node and don't
- * share the app's TypeScript build setup. Same math, no DOM, no I/O.
+ * The pure geometry primitives (`haversineMeters`, `projectOnPolyline`)
+ * live in `@n3ary/gtfs-spec/shape` (shared with the orchestrator's
+ * GTFS worker + the `neary` runtime). This module re-exports them and
+ * adds one composition helper — `cumulativeShapeDistances` — that
+ * turns a stop sequence + a polyline into monotonic per-stop
+ * cumulative distances with haversine fallback for off-shape stops.
+ * That fallback is adapter-specific (the 200 m threshold + the
+ * `max(..., previous + 1)` monotonicity rule are reconciliation
+ * choices, not GTFS invariants).
  *
- * Used by the reconciliation pipeline to walk each trip's
- * `stop_sequence` along its `shape_id` polyline so stop-to-stop
- * distances reflect the road, not crow-flight haversine.
- *
- * Vendored from ciotlosm/neary-gtfs (src/pipeline/lib/polyline.js)
- * on 2026-06-29. Original copyright: MIT, Marius Ciotlos.
+ * Used by `lib/timing.ts` to walk each trip's `stop_sequence` along
+ * its `shape_id` polyline so stop-to-stop distances reflect the
+ * road, not crow-flight haversine.
  */
 
-const R_EARTH_M = 6_371_000;
+import { haversineMeters, projectOnPolyline } from '@n3ary/gtfs-spec/shape';
 
-/** Great-circle distance in meters between two lat/lon points. */
-export function haversineMeters(lat1, lon1, lat2, lon2) {
-  const toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R_EARTH_M * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-/**
- * Project a single point onto the closest segment of a polyline.
- * Returns the cumulative distance along the polyline at the
- * projection (`distAlongM`) and the perpendicular distance from the
- * input point to the polyline (`perpDistM`).
- *
- * Per-segment math uses an equirectangular linearization anchored on
- * each segment's first vertex; segment lengths are computed exactly
- * with haversine so meter values are not skewed.
- *
- * Throws on a polyline of fewer than 2 points — callers must guard.
- *
- * @param {{lat:number,lon:number}} point
- * @param {Array<{lat:number,lon:number}>} polyline
- * @returns {{distAlongM:number, perpDistM:number, segmentIdx:number}}
- */
-export function projectOnPolyline(point, polyline) {
-  if (!Array.isArray(polyline) || polyline.length < 2) {
-    throw new Error('projectOnPolyline: polyline must have at least 2 points');
-  }
-  let bestPerpM = Infinity;
-  let bestSegmentIdx = 0;
-  let bestDistAlongM = 0;
-  let runningCumDistM = 0;
-
-  for (let i = 0; i < polyline.length - 1; i++) {
-    const a = polyline[i];
-    const b = polyline[i + 1];
-    const segLenM = haversineMeters(a.lat, a.lon, b.lat, b.lon);
-    const { t, perpM } = projectOnSegment(point, a, b, segLenM);
-    if (perpM < bestPerpM) {
-      bestPerpM = perpM;
-      bestSegmentIdx = i;
-      bestDistAlongM = runningCumDistM + t * segLenM;
-    }
-    runningCumDistM += segLenM;
-  }
-
-  return { distAlongM: bestDistAlongM, perpDistM: bestPerpM, segmentIdx: bestSegmentIdx };
-}
-
-function projectOnSegment(p, a, b, segLenM) {
-  if (segLenM === 0) {
-    return { t: 0, perpM: haversineMeters(p.lat, p.lon, a.lat, a.lon) };
-  }
-  const cosLat = Math.cos((a.lat * Math.PI) / 180);
-  const ax = a.lon * cosLat;
-  const ay = a.lat;
-  const bx = b.lon * cosLat;
-  const by = b.lat;
-  const px = p.lon * cosLat;
-  const py = p.lat;
-  const dx = bx - ax;
-  const dy = by - ay;
-  const lenSq = dx * dx + dy * dy;
-  const tRaw = ((px - ax) * dx + (py - ay) * dy) / lenSq;
-  const t = Math.max(0, Math.min(1, tRaw));
-  const projLat = ay + t * dy;
-  const projLon = (ax + t * dx) / cosLat;
-  const perpM = haversineMeters(p.lat, p.lon, projLat, projLon);
-  return { t, perpM };
-}
+export { haversineMeters, projectOnPolyline };
 
 /**
  * Project each stop in `stops` onto the polyline and return their

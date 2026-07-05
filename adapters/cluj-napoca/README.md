@@ -138,26 +138,53 @@ a verbatim citation from another project's code or docs).
 
 ## Deployment
 
-GitHub Actions cron at `30 0 * * *` UTC publishes the daily zip to the
-`binaries` branch, served directly from GitHub raw:
+This adapter's runtime is driven by the
+[`gtfs-publisher`](https://github.com/n3ary/gtfs-publisher)
+orchestrator. Daily flow:
 
 ```
-https://raw.githubusercontent.com/ciotlosm/cluj-napoca-gtfs-adapter/binaries/cluj-napoca.gtfs.zip
+gtfs-publisher cron (00:30 UTC)
+  → packages/gtfs-static pipeline (`node dist/cli.js`)
+    → acquireGtfsAdapter('cluj-napoca', '@n3ary/gtfs-adapter-cluj-napoca')
+      → dynamic-import @n3ary/gtfs-adapter-cluj-napoca/ingest
+        → ingestBuild({ outputDir, buildDate, secrets: { TRANZY_API_KEY } })
+          → Transitous seed load
+          → Tranzy fetch (X-AGENCY-ID: 2)
+          → CTP CSV scrape (live, on demand)
+          → reconcile + emit via @n3ary/gtfs-spec/serialize
+          → writeGtfsZip → return { zip, sizeBytes }
+      ← bytes
+    → deriveBbox + makeSqlite (+ @n3ary/gtfs-adapter-cluj-napoca/static extension)
+    → publish zip + sqlite to Cloudflare R2 + update feeds.json
 ```
 
-Requires a `TRANZY_API_KEY` repo secret. Optional: `RT_PARITY_URL`
-repo variable to enable the GTFS-RT trip-ID parity check
-(`scripts/smoke-rt-parity.js`). See
-[`.github/workflows/daily.yml`](./.github/workflows/daily.yml).
+Downstream consumers (`neary` PWA, anyone reading `feeds.json`) reach
+this adapter's output exclusively through R2 — there is **no longer
+a `binaries` branch or GitHub raw URL**. See `docs/architecture.md`
+for the full picture and `n3ary/gtfs-publisher`'s `daily.yml` for the
+canonical cron.
+
+Requires a `TRANZY_API_KEY` secret at the orchestrator level (set on
+the `gtfs-publisher` repo). This adapter doesn't read any secrets
+directly — they're passed in via `ingestBuild({ secrets })`.
+
+Local development:
+
+```bash
+pnpm build
+pnpm test          # 164 tests, ~16s
+pnpm smoke:trip-ids  # self-check trip_id ends in _HHMM
+```
 
 ## Contributing
 
 `main` is protected — every change goes through a PR. See
 [docs/standards/version-management.md](docs/standards/version-management.md)
 for the bump-on-PR rule. PRs trigger
-[`.github/workflows/pr-validation.yml`](.github/workflows/pr-validation.yml),
-which bumps `package.json#version` on the PR branch and runs validate +
-test + reconcile:dry. The daily workflow (above) handles publish.
+[`.github/workflows/pr-validation.yml`](.github/workflows/pr-validation.yml)
+which runs `check` + `test`. Merging to `main` triggers
+[`.github/workflows/publish-adapter.yml`](.github/workflows/publish-adapter.yml)
+on `adapters/cluj-napoca/v*` tags.
 
 Branch protection on `main`:
 - PR required, 0 approvals (solo-dev friendly)

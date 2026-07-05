@@ -1,21 +1,24 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 /**
- * CTP CSV fetcher — network + disk read paths.
+ * CTP CSV fetcher — live network reads.
  *
- * Two read paths:
- *   - `fetchCtpCsv` — fetches from CTP upstream (reconcile dev)
- *   - `readCtpCsvFromDisk` — reads from `.build-input/csv/` (build)
+ * `fetchCtpCsv` fetches from CTP upstream and returns
+ * `CtpCsvSchedule | null` (or throws on operator errors — see
+ * each function's doc). Multi-fetch orchestrator
+ * (`fetchAllCsvSchedules`) accepts a `loadFn` so callers can
+ * mix-and-match data sources (e.g. for tests with a fixture
+ * reader).
  *
- * Both return `CtpCsvSchedule | null` (or throw on operator errors,
- * see each function's doc).
- *
- * Multi-fetch orchestrator (`fetchAllCsvSchedules`) accepts a `loadFn`
- * so callers can mix-and-match data sources.
+ * History: previously also exposed `readCtpCsvFromDisk` for a
+ * two-phase pipeline (.build-input/csv/ populated by a separate
+ * smoke script). That script was retired when the orchestrator
+ * became the canonical build driver (see
+ * https://github.com/n3ary/gtfs-publisher); the live fetch path
+ * here is now the only entry point the adapter uses.
  */
 
 import { USER_AGENT } from '../../lib/seed.ts';
 import { warnMsg } from '../../lib/log-severity.ts';
-import { readCsvBody, readStatusManifest } from '../../lib/build-input.ts';
 import { TRANZY_TO_CTP_SHORTNAME, canonicalShortName } from './shortname-aliases.ts';
 import { parseCtpCsv } from './parser.ts';
 
@@ -95,11 +98,6 @@ const DEFAULT_SERVICE_ID_MAP = { lv: 'LV', s: 'S', d: 'D' };
 /**
  * Fetch + parse one CSV from upstream CTP.
  *
- * The build pipeline NEVER calls this — the build command reads
- * pre-fetched CSVs from `.build-input/` via {@link readCtpCsvFromDisk}.
- * This function exists for the `reconcile` (dry-run) command and any
- * other dev workflow that wants live data without running smoke first.
- *
  * Failure modes (all soft — return null, downstream uses Tranzy
  * fallback):
  *   - network error / timeout
@@ -149,49 +147,6 @@ export async function fetchCtpCsv(routeShortName, serviceKey, opts = {}) {
 }
 
 /**
- * Read + parse one CSV from the `.build-input/` directory populated
- * by a prior smoke run.
- *
- * Used by the build command. Throws if the manifest is missing —
- * that's an operator error (smoke wasn't run), not a catalog gap.
- * Returns null only for legit 404 entries that smoke recorded.
- *
- * @param {string} routeShortName
- * @param {string} serviceKey
- * @returns {CtpCsvSchedule | null}
- */
-export function readCtpCsvFromDisk(routeShortName, serviceKey) {
-  const manifest = readStatusManifest();
-  if (!manifest) {
-    throw new Error(
-      `[ctp-csv] .build-input/csv-status.json not found. ` +
-      `Run scripts/fetch-stage.js first to populate the build-input directory.`,
-    );
-  }
-  const entry = manifest.entries.find((e) => e.route === routeShortName && e.svc === serviceKey);
-  if (!entry) {
-    throw new Error(
-      `[ctp-csv] ${routeShortName}_${serviceKey} not found in smoke manifest. ` +
-      `Smoke may have run against a different route list — re-run it.`,
-    );
-  }
-  if (entry.status !== 'ok') {
-    // 404 / WAF / HTTP / network — smoke would have failed loud on
-    // infra, so reaching here implies a legit catalog gap (status=not-found).
-    // Return null and let downstream use Tranzy fallback.
-    return null;
-  }
-  const body = readCsvBody(routeShortName, serviceKey);
-  if (body == null) {
-    throw new Error(
-      `[ctp-csv] ${routeShortName}_${serviceKey} marked ok in manifest but body file is missing. ` +
-      `Re-run smoke.`,
-    );
-  }
-  return parseCtpCsv(body);
-}
-
-/**
  * Module-level dedup for WAF warnings. When CTP blocks us with a
  * challenge page, every fetchCtpCsv call would otherwise spam the
  * same `<!DOCTYPE html> ...` warning line. We log the first 3 unique
@@ -223,8 +178,8 @@ function wafWarnDedup(shortName, svcKey, body) {
  * Load all (route, service) CSVs in parallel with bounded concurrency.
  *
  * The `loadFn` parameter selects the data source:
- *   - default `fetchCtpCsv` — fetches from CTP upstream (reconcile dev)
- *   - `readCtpCsvFromDisk` — reads from .build-input/csv/ (build)
+ *   - default `fetchCtpCsv` — fetches from CTP upstream (live build)
+ *   - a fixture reader — for tests
  *
  * The loadFn can be sync or async; this function awaits both via
  * Promise.resolve().

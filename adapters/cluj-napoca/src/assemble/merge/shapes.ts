@@ -1,5 +1,6 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 import { ShapeRowSchema, serializeRows, type ShapeRow } from '@n3ary/gtfs-spec/spec';
+import { haversineMeters } from '@n3ary/gtfs-spec/shape';
 /**
  * Shapes reconciliation.
  *
@@ -19,6 +20,11 @@ import { ShapeRowSchema, serializeRows, type ShapeRow } from '@n3ary/gtfs-spec/s
  *
  * Tranzy returns shape points as `ShapeRow` (see @n3ary/gtfs-spec).
  * We group by shape_id and emit rows ordered by sequence.
+ *
+ * Note: `haversineMeters` comes from `@n3ary/gtfs-spec/shape` (the
+ * canonical math, shared with the orchestrator's GTFS worker).
+ * The previous local copy here was identical but vendored; the spec
+ * is the single source of truth.
  */
 
 import { info } from '../../lib/log-severity.ts';
@@ -103,15 +109,6 @@ export function reconcileShapes({ seed, tranzy, warnings }) {
   }
 
   return { shapesById: byShapeId, rows };
-}
-
-function haversineMeters(lat1, lon1, lat2, lon2) {
-  const R = 6371000;
-  const toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 export async function shapesToTxt(rows) {
