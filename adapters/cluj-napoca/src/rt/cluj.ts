@@ -3,10 +3,11 @@
  * upstream's `<route>_<dir>_<service>_<run>_<HHMM>`-encoded
  * `trip_id`. See n3ary/app#161 for the full context.
  *
- * Originally lived in `n3ary/gtfs/packages/gtfs-rt/src/quirks/cluj.ts`
- * — moved here as part of the per-feed-knowledge extraction
- * (n3ary/gtfs#67). The generic gtfs-rt proxy loads this quirk at
- * startup; the consumer (n3ary/app) stays strictly feed-agnostic.
+ * Canonical source for the per-feed quirk. The generic gtfs-rt
+ * proxy (`n3ary/gtfs-publisher/packages/gtfs-rt/src/quirks/`)
+ * imports it from `@n3ary/gtfs-adapter-cluj-napoca/rt` —
+ * finishing step 4 of n3ary/gtfs-publisher#67. See
+ * n3ary/gtfs-publisher#91 for the orchestrator-side redirect.
  *
  * Encoding (from the upstream):
  *   <route_id>_<dir_id>_<service_id>_<run>_<HHMM>
@@ -44,7 +45,7 @@ export function parseClujTripId(
   };
 }
 
-export const clujRtQuirk: ClujQuirk = (feedMessage) => {
+export const clujQuirk: ClujQuirk = (feedMessage) => {
   for (const entity of feedMessage.entity) {
     if (!entity.vehicle) continue;
     const trip = entity.vehicle.trip;

@@ -53,7 +53,7 @@ and three subpaths:
 - `./static` — `staticExtension(feedConfig)` for sqlite columns (route
   colors + `_neary_config` table); required by the orchestrator's
   `makeSqlite`
-- `./rt` — `clujRtQuirk` for the GTFS-RT proxy in `gtfs-rt`; loaded by
+- `./rt` — `clujQuirk` for the GTFS-RT proxy in `gtfs-rt`; loaded by
   the orchestrator's quirk registry
 
 See `src/ingest/index.ts:38-77` for the `IngestOptions` / `IngestResult`
@@ -209,7 +209,7 @@ can apply route-color substitution + network-color writeback.
 
 ### `src/rt/index.ts`
 
-The GTFS-RT quirk for the CTP live feed. Exports `clujRtQuirk`,
+The GTFS-RT quirk for the CTP live feed. Exports `clujQuirk`,
 `parseClujTripId`, `registerRtQuirks`. Consumed by the `gtfs-rt`
 proxy's quirk registry.
 
