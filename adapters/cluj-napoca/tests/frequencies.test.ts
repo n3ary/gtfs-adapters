@@ -32,8 +32,8 @@ describe('#15 — M26 frequency annotation fix', () => {
   const seed = buildFixtureSeedMemory();
   const csv = { byRouteService: buildCsvByRouteService(), warnings: [] };
 
-  it('emits a frequencies.txt row for M26 dir0 LV', () => {
-    const { files } = reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
+  it('emits a frequencies.txt row for M26 dir0 LV', async () => {
+    const { files } = await reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
     expect(files['frequencies.txt']).toBeTruthy();
     expect(files['frequencies.txt']).toMatch(/^trip_id,/m);
     // Anchor for M26 dir=0 LV at 05:05 (start of operating window).
@@ -42,8 +42,8 @@ describe('#15 — M26 frequency annotation fix', () => {
     expect(files['frequencies.txt']).toMatch(/M26_0_LV_FREQ_0505,05:05:00,22:40:00,900,0/);
   });
 
-  it('emits a frequency anchor trip in trips.txt with the right pattern', () => {
-    const { files } = reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
+  it('emits a frequency anchor trip in trips.txt with the right pattern', async () => {
+    const { files } = await reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
     const tripLines = files['trips.txt'].split('\n').slice(1).filter(Boolean);
     const anchor = tripLines.find((l) => l.includes('M26_0_LV_FREQ_0505'));
     expect(anchor).toBeTruthy();
@@ -55,14 +55,14 @@ describe('#15 — M26 frequency annotation fix', () => {
     expect(anchorStopTimes[0]).toMatch(/^M26_0_LV_FREQ_0505,05:05:00,05:05:00,D,/);
   });
 
-  it('does NOT emit a frequency anchor for routes with no annotations', () => {
-    const { files, warnings } = reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
+  it('does NOT emit a frequency anchor for routes with no annotations', async () => {
+    const { files, warnings } = await reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
     // 35 has no frequency annotations → no anchor
     expect(files['frequencies.txt']).not.toMatch(/^35_\d+_(LV|S|D|LD)_FREQ_/m);
   });
 
-  it('logs the frequency anchor in build warnings', () => {
-    const { warnings } = reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
+  it('logs the frequency anchor in build warnings', async () => {
+    const { warnings } = await reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
     expect(warnings.some((w) => w.message.includes('frequency anchor') && w.message.includes('M26') && w.message.includes('dir=0'))).toBe(true);
   });
 });

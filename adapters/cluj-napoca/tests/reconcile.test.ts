@@ -31,8 +31,8 @@ describe('reconcile', () => {
     warnings: [],
   };
 
-  it('emits all required GTFS files', () => {
-    const { files } = reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
+  it('emits all required GTFS files', async () => {
+    const { files } = await reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
     expect(files['agency.txt']).toBeTruthy();
     expect(files['routes.txt']).toBeTruthy();
     expect(files['stops.txt']).toBeTruthy();
@@ -42,31 +42,36 @@ describe('reconcile', () => {
     expect(files['feed_info.txt']).toBeTruthy();
   });
 
-  it('route 22 from Tranzy (orange, neary-gtfs#14) is included with its Tranzy color', () => {
+  it('route 22 from Tranzy (orange, neary-gtfs#14) is included with its Tranzy color', async () => {
     // Non-black Tranzy colors are passed through unchanged; only black /
     // missing values get substituted with the per-type modal color.
-    const { files } = reconcile({ seed, tranzy: fixtures.tranzy, csv, options: { buildDate: new Date('2026-06-29') } });
+    const { files } = await reconcile({ seed, tranzy: fixtures.tranzy, csv, options: { buildDate: new Date('2026-06-29') } });
     const routesLines = files['routes.txt'].split('\n');
     const r22 = routesLines.find((l) => l.startsWith('22,'));
     expect(r22).toBeTruthy();
     expect(r22).toMatch(/EF8732/);
   });
 
-  it('M26 direction=1 is resolvable via Tranzy fallback (fixes #15)', () => {
-    const { warnings } = reconcile({ seed, tranzy: fixtures.tranzy, csv, options: { buildDate: new Date('2026-06-29') } });
+  it('M26 direction=1 is resolvable via Tranzy fallback (fixes #15)', async () => {
+    const { warnings } = await reconcile({ seed, tranzy: fixtures.tranzy, csv, options: { buildDate: new Date('2026-06-29') } });
     // We should NOT have a warning about M26 dir=1 having no pattern.
     const has = warnings.some((w) => w.message.includes('M26') && w.message.includes('dir=1') && w.message.includes('No pattern'));
     expect(has).toBe(false);
   });
 
-  it('generates trip_ids in ${route}_${dir}_${serviceId}_${HHMM} format', () => {
-    const { files } = reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
+  it('generates trip_ids in ${route}_${dir}_${serviceId}_${HHMM} format', async () => {
+    const { files } = await reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
     const tripLines = files['trips.txt'].split('\n').slice(1).filter(Boolean);
     expect(tripLines.length).toBeGreaterThan(0);
     const tripIdRe = /^[A-Za-z0-9]+_[01]_(LV|S|D|LD)(?:_FREQ)?_\d{4}$/;
     for (const line of tripLines) {
       const cols = line.split(',');
-      const tripId = cols[2];
+      // trips.txt is now spec-driven: trip_id is the first column
+      // (canonical GTFS order). The old hand-rolled writer emitted
+      // `route_id, service_id, trip_id, ...` which was non-canonical
+      // and made this assertion silently wrong — the spec-driven
+      // serializer fixed that drift surface for free.
+      const tripId = cols[0];
       // Format options:
       //   <route>_<dir>_<serviceId>_<HHMM>          (regular trip)
       //   <route>_<dir>_<serviceId>_FREQ_<HHMM>     (frequency anchor)
@@ -80,8 +85,8 @@ describe('reconcile', () => {
     }
   });
 
-  it('stop_times arrivals are monotonically non-decreasing within each trip', () => {
-    const { files } = reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
+  it('stop_times arrivals are monotonically non-decreasing within each trip', async () => {
+    const { files } = await reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
     const lines = files['stop_times.txt'].split('\n').slice(1).filter(Boolean);
     /** @type {Map<string, number[]>} */
     const byTrip = new Map();
@@ -99,12 +104,12 @@ describe('reconcile', () => {
     }
   });
 
-  it('stop_times preserves stop_sequence from the upstream pattern (seed or Tranzy)', () => {
+  it('stop_times preserves stop_sequence from the upstream pattern (seed or Tranzy)', async () => {
     // Seed fixture has sequences 0, 1, 2 for route 35 dir=0 trips
     // (stops A, B, C). The reconciler must inherit those numbers,
     // not re-number with a fresh sequential index — re-numbering would
     // discard any non-contiguous numbering the operator uses.
-    const { files } = reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
+    const { files } = await reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
     const lines = files['stop_times.txt'].split('\n').slice(1).filter(Boolean);
     /** @type {Map<string, Array<{stopId: string, sequence: number}>>} */
     const byTrip = new Map();
@@ -126,14 +131,14 @@ describe('reconcile', () => {
     expect(seqByStop.C).toBe(2);
   });
 
-  it('calendar.txt has LV, S, D entries (services we actually scraped)', () => {
-    const { files } = reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
+  it('calendar.txt has LV, S, D entries (services we actually scraped)', async () => {
+    const { files } = await reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
     expect(files['calendar.txt']).toMatch(/^LV,/m);
     expect(files['calendar.txt']).toMatch(/^S,/m);
     expect(files['calendar.txt']).toMatch(/^D,/m);
   });
 
-  it('drops phantom routes (Tranzy catalog entry but no trips anywhere) with a WARN', () => {
+  it('drops phantom routes (Tranzy catalog entry but no trips anywhere) with a WARN', async () => {
     // Synthetic Tranzy response that lists route 999 ("Phantom") in /routes
     // but provides no /trips or /stop_times for it — mirrors the live
     // behavior observed for route_id=117 (short_name="2") and
@@ -150,7 +155,7 @@ describe('reconcile', () => {
       shapes: [],
       calendar: [],
     };
-    const { files, warnings } = reconcile({ seed, tranzy: phantomTranzy, csv, options: { buildDate: new Date('2026-06-29') } });
+    const { files, warnings } = await reconcile({ seed, tranzy: phantomTranzy, csv, options: { buildDate: new Date('2026-06-29') } });
     const routesLines = files['routes.txt'].split('\n').slice(1).filter(Boolean);
     expect(routesLines.find((l) => l.startsWith('999,'))).toBeUndefined();
     const phantomWarn = warnings.find((w) => w.message.includes('phantom route'));
@@ -160,7 +165,7 @@ describe('reconcile', () => {
     expect(phantomWarn.message).toContain('route_id=999');
   });
 
-  it('keeps routes that have ONLY Tranzy fallback trips (no CSV)', () => {
+  it('keeps routes that have ONLY Tranzy fallback trips (no CSV)', async () => {
     // Mirror real Tranzy-fallback behavior: a route with no CSV coverage
     // but with /trips + /stop_times in Tranzy data should still produce
     // _NTxxx synthetic trip rows and survive the phantom filter.
@@ -179,7 +184,7 @@ describe('reconcile', () => {
       shapes: [],
       calendar: [],
     };
-    const { files, warnings } = reconcile({ seed, tranzy: fallbackTranzy, csv, options: { buildDate: new Date('2026-06-29') } });
+    const { files, warnings } = await reconcile({ seed, tranzy: fallbackTranzy, csv, options: { buildDate: new Date('2026-06-29') } });
     const routesLines = files['routes.txt'].split('\n').slice(1).filter(Boolean);
     expect(routesLines.find((l) => l.startsWith('888,'))).toBeDefined();
     const phantomWarn = warnings.find((w) => w.message.includes('phantom route'));
@@ -188,7 +193,7 @@ describe('reconcile', () => {
     expect(warnings.some((w) => w.message.includes('Tranzy /trips fallback'))).toBe(true);
   });
 
-  it('emits networks.txt + route_networks.txt with category-classified routes (neary#125, neary#129)', () => {
+  it('emits networks.txt + route_networks.txt with category-classified routes (neary#125, neary#129)', async () => {
     // Synthesize a Tranzy response with one route per category so we can
     // pin the file shape end-to-end without depending on the live catalog.
     const tranzy = {
@@ -221,7 +226,7 @@ describe('reconcile', () => {
       shapes: [],
       calendar: [],
     };
-    const { files } = reconcile({ seed: buildFixtureSeedMemory(), tranzy, csv, options: { buildDate: new Date('2026-06-29') } });
+    const { files } = await reconcile({ seed: buildFixtureSeedMemory(), tranzy, csv, options: { buildDate: new Date('2026-06-29') } });
 
     // The seed ships with route M26 (Piata Garii - Selimbar) which
     // classifies as metroline. So networks.txt also gets a metroline
@@ -280,7 +285,7 @@ describe('reconcile', () => {
     expect(r1row.split(',')[4]).toBe('');
   });
 
-  it('derives route_long_name from stop_times when cleanup leaves it empty', () => {
+  it('derives route_long_name from stop_times when cleanup leaves it empty', async () => {
     // Synthesize a route whose Tranzy long_name is just an annotation
     // (no start/end). After cleanup → empty. The orchestrator should
     // fall back to "<first stop> - <last stop>" from stop_times.
@@ -308,7 +313,7 @@ describe('reconcile', () => {
       shapes: [],
       calendar: [],
     };
-    const { files, warnings } = reconcile({
+    const { files, warnings } = await reconcile({
       seed: buildFixtureSeedMemory(), tranzy, csv, options: { buildDate: new Date('2026-06-29') },
     });
 

@@ -157,7 +157,7 @@ export async function ingestBuild(opts: IngestOptions): Promise<IngestResult> {
   console.log(`[ctp-csv] scraped ${csv.byRouteService.size} routes`);
 
   // 4. Reconcile.
-  const { files, warnings, stats } = reconcile({
+  const { files, warnings, stats } = await reconcile({
     seed,
     tranzy: tranzyData,
     csv,

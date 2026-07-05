@@ -1,5 +1,5 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
-import { ShapeRowSchema, type ShapeRow } from '@n3ary/gtfs-spec/spec';
+import { ShapeRowSchema, serializeRows, type ShapeRow } from '@n3ary/gtfs-spec/spec';
 /**
  * Shapes reconciliation.
  *
@@ -114,26 +114,7 @@ function haversineMeters(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function shapesToTxt(rows) {
-  // Canonical shapes.txt columns from the shared spec.
-  const headers = Object.keys(ShapeRowSchema.shape);
-  const lines = [headers.join(',')];
-  for (const r of rows) {
-    lines.push([
-      csvField(r.shape_id),
-      csvField(r.shape_pt_lat),
-      csvField(r.shape_pt_lon),
-      csvField(r.shape_pt_sequence),
-      csvField(r.shape_dist_traveled),
-    ].join(','));
-  }
-  return lines.join('\n') + '\n';
-}
-
-function csvField(v) {
-  const s = (v ?? '').toString();
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
+export async function shapesToTxt(rows) {
+  // Spec-driven serializer — same pattern as stopsToTxt/routesToTxt.
+  return serializeRows(ShapeRowSchema, rows);
 }

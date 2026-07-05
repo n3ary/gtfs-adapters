@@ -110,7 +110,7 @@ async function cmdBuild() {
 
   // 4. Reconcile + write.
   console.log('[4/4] Reconciling + writing');
-  const { files, warnings, stats } = reconcile({
+  const { files, warnings, stats } = await reconcile({
     seed,
     tranzy: tranzyData,
     csv,
@@ -174,7 +174,7 @@ async function cmdReconcileDryRun() {
   const tranzyData = await tranzy.fetchAll();
   const csv = await fetchAllCsvSchedules(seed.routes);
 
-  const { warnings, stats } = reconcile({
+  const { warnings, stats } = await reconcile({
     seed,
     tranzy: tranzyData,
     csv,

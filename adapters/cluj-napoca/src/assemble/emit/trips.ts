@@ -1,5 +1,5 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
-import { TripRowSchema, StopTimeRowSchema, ShapeRowSchema, type TripRow, type StopTimeRow, type ShapeRow } from '@n3ary/gtfs-spec/spec';
+import { TripRowSchema, StopTimeRowSchema, ShapeRowSchema, serializeRows, type TripRow, type StopTimeRow, type ShapeRow } from '@n3ary/gtfs-spec/spec';
 /**
  * Trips + stop_times reconciliation.
  *
@@ -854,56 +854,15 @@ function formatGtfsTime(seconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export function tripsToTxt(tripRows) {
-  const headers = Object.keys(TripRowSchema.shape);
-  const lines = [headers.join(',')];
-  for (const t of tripRows) {
-    lines.push([
-      csvField(t.route_id),
-      csvField(t.service_id),
-      csvField(t.trip_id),
-      csvField(t.trip_headsign),
-      '', // trip_short_name
-      csvField(t.direction_id),
-      '', // block_id
-      csvField(t.shape_id),
-      '', // wheelchair_accessible
-      '', // bikes_allowed
-    ].join(','));
-  }
-  return lines.join('\n') + '\n';
+export async function tripsToTxt(tripRows) {
+  // Spec-driven serializer — same pattern as stopsToTxt/routesToTxt.
+  return serializeRows(TripRowSchema, tripRows);
 }
 
-export function stopTimesToTxt(stopTimeRows) {
-  // Canonical stop_times.txt columns from the shared spec.
-  const headers = Object.keys(StopTimeRowSchema.shape);
-  const lines = [headers.join(',')];
-  for (const s of stopTimeRows) {
-    lines.push([
-      csvField(s.trip_id),
-      csvField(s.arrival_time),
-      csvField(s.departure_time),
-      csvField(s.stop_id),
-      csvField(s.stop_sequence),
-      '', // stop_headsign
-      '', '', '', '',
-      csvField(s.shape_dist_traveled),
-      // timepoint: 0 = approximate/interpolated. Our per-stop arrival
-      // and departure times come from computeStopTimes() which projects
-      // the CSV's origin departure across the shape using peak/offpeak/
-      // night speed buckets — they're synthesized, not authoritative.
-      // Per GTFS spec, this is the canonical use case for timepoint=0.
-      // See https://gtfs.org/schedule/reference/#stop_timestxt
-      '0',
-    ].join(','));
-  }
-  return lines.join('\n') + '\n';
-}
-
-function csvField(v) {
-  const s = (v ?? '').toString();
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
+export async function stopTimesToTxt(stopTimeRows) {
+  // Spec-driven serializer. The `timepoint: '0'` value (approximate,
+  // synthesized by computeStopTimes() rather than authoritative — see
+  // https://gtfs.org/schedule/reference/#stop_timestxt) is set on each
+  // row by the caller before this function sees it.
+  return serializeRows(StopTimeRowSchema, stopTimeRows);
 }
