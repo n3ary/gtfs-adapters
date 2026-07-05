@@ -5,12 +5,27 @@ on:
     branches: [main]
 
 # Each adapter in adapters/ has its own validate job. The
-# standards-drift check runs once on the repo root.
+# standards-drift check runs once on the repo root. The
+# ascii-check job runs first (fast-fail) on every PR.
 
 permissions:
   contents: write  # version-bump action
 
 jobs:
+  ascii-check:
+    # Fail fast before the heavier validate matrix runs.
+    # Catches non-ASCII (em-dash, en-dash, arrows, ellipsis,
+    # smart quotes, NBSP, ZWJ, ...) in commit messages or PR
+    # titles. See .github/actions/ascii-commits README at
+    # github.com/n3ary/actions for details.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: ASCII-only check
+        uses: n3ary/actions/.github/actions/ascii-commits@v1
+
   drift-check:
     runs-on: ubuntu-latest
     steps:
