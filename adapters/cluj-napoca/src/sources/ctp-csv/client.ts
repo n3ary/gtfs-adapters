@@ -1,9 +1,9 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 /**
- * CTP CSV fetcher — live network reads.
+ * CTP CSV fetcher - live network reads.
  *
  * `fetchCtpCsv` fetches from CTP upstream and returns
- * `CtpCsvSchedule | null` (or throws on operator errors — see
+ * `CtpCsvSchedule | null` (or throws on operator errors - see
  * each function's doc). Multi-fetch orchestrator
  * (`fetchAllCsvSchedules`) accepts a `loadFn` so callers can
  * mix-and-match data sources (e.g. for tests with a fixture
@@ -34,12 +34,12 @@ const DEFAULT_BASE_URL = 'https://ctpcj.ro/orare/csv/orar_{routeShortName}_{serv
  *   - `39 CREIC` (the Transitous route_short_name with a space)
  *     becomes `39CREIC` (no space) → URL `orar_39CREIC_lv.csv`
  *   - URL-encoded form `orar_39%20CREIC_lv.csv` returns 404 even
- *     when CTP has published the CSV — verified by hitting both
+ *     when CTP has published the CSV - verified by hitting both
  *     endpoints: the no-space form returns the actual route_long_name
  *     header, the URL-encoded form returns 404.
  *
  * Exposed as a separate helper for completeness, but most callers
- * should reach for {@link canonicalShortName} instead — it composes
+ * should reach for {@link canonicalShortName} instead - it composes
  * this helper with the {@link TRANZY_TO_CTP_SHORTNAME} alias map
  * so both rules apply in one call.
  *
@@ -52,7 +52,7 @@ export function normalizeShortNameForCtpUrl(routeShortName) {
 
 /**
  * Build the canonical CTP CSV URL for a (route_short_name, service_id)
- * pair. Single source of truth — the fetch-stage script and the
+ * pair. Single source of truth - the fetch-stage script and the
  * inspect-404s diagnostic both use this so URL-convention changes
  * only need to land in one place.
  *
@@ -69,7 +69,7 @@ export function normalizeShortNameForCtpUrl(routeShortName) {
  */
 export function buildCtpCsvUrl(routeShortName, serviceKey, baseUrl = DEFAULT_BASE_URL) {
   // canonicalShortName applies the Tranzy→CTP alias map and strips
-  // whitespace — same rules every other CSV-IO path uses. Keeping it
+  // whitespace - same rules every other CSV-IO path uses. Keeping it
   // here means the URL convention lives in exactly one place.
   const urlShortName = canonicalShortName(routeShortName);
   return baseUrl
@@ -98,10 +98,10 @@ const DEFAULT_SERVICE_ID_MAP = { lv: 'LV', s: 'S', d: 'D' };
 /**
  * Fetch + parse one CSV from upstream CTP.
  *
- * Failure modes (all soft — return null, downstream uses Tranzy
+ * Failure modes (all soft - return null, downstream uses Tranzy
  * fallback):
  *   - network error / timeout
- *   - 404 (CTP doesn't publish this CSV — legit catalog gap)
+ *   - 404 (CTP doesn't publish this CSV - legit catalog gap)
  *   - other 4xx/5xx (server-side issue, worth surfacing)
  *   - 200 OK but body isn't CSV (WAF challenge page)
  *
@@ -137,7 +137,7 @@ export async function fetchCtpCsv(routeShortName, serviceKey, opts = {}) {
   // Sanity check: real CSV always starts with "route_long_name,". Anything
   // else (WAF challenge page, captcha HTML, etc.) is a soft failure.
   // During heavy WAF incidents this can fire for hundreds of fetches
-  // per build — log the first 3 unique body signatures, then dedup.
+  // per build - log the first 3 unique body signatures, then dedup.
   // The full per-category counts end up in the smoke summary.
   if (!body.startsWith('route_long_name,')) {
     wafWarnDedup(routeShortName, serviceKey, body);
@@ -159,7 +159,7 @@ function wafWarnDedup(shortName, svcKey, body) {
   _wafTotal++;
   const sig = `${body.length}:${body.slice(0, 60).replace(/\s+/g, ' ')}`;
   if (_wafSeen.has(sig)) {
-    // Already logged this signature — silent (counted in summary).
+    // Already logged this signature - silent (counted in summary).
     return;
   }
   _wafSeen.add(sig);
@@ -167,7 +167,7 @@ function wafWarnDedup(shortName, svcKey, body) {
     console.warn(`[ctp-csv] ${shortName}_${svcKey}: not CSV (got ${body.length}B starting "${body.slice(0, 40).replace(/\s+/g, ' ')}…")`);
     _wafLogged++;
     if (_wafLogged === 3 && _wafTotal > 3) {
-      console.warn(`[ctp-csv] (further WAF/non-CSV responses suppressed — full breakdown in smoke summary)`);
+      console.warn(`[ctp-csv] (further WAF/non-CSV responses suppressed - full breakdown in smoke summary)`);
     }
   }
   // Once we've logged 3 unique sigs + the suppression notice, the
@@ -178,11 +178,23 @@ function wafWarnDedup(shortName, svcKey, body) {
  * Load all (route, service) CSVs in parallel with bounded concurrency.
  *
  * The `loadFn` parameter selects the data source:
- *   - default `fetchCtpCsv` — fetches from CTP upstream (live build)
- *   - a fixture reader — for tests
+ *   - default `fetchCtpCsv` - fetches from CTP upstream (live build)
+ *   - a fixture reader - for tests
  *
  * The loadFn can be sync or async; this function awaits both via
  * Promise.resolve().
+ *
+ * Fail-fast on WAF (any non-CSV 200 response - captcha, maintenance
+ * page, IP block, etc.). The aggregated count is checked after all
+ * in-flight fetches complete; if any returned a non-CSV body, we
+ * throw with a clear message instead of silently publishing a
+ * degraded feed. Without this, the 12:49 UTC 2026-07-05 daily run
+ * shipped a cluj-napoca feed with 951 trips / 12,249 stop_times
+ * instead of the healthy 15,053 / 207,240 (CTP's WAF had eaten every
+ * CSV fetch but the build passed - downstream consumer surfaced
+ * "no stops near me"). The publisher's daily.yml sets STRICT=true,
+ * so this throw propagates and fails the job. Operator re-runs when
+ * CTP responds cleanly.
  *
  * @param {Array<{shortName: string}>} routes
  * @param {object} [opts]
@@ -197,6 +209,18 @@ export async function fetchAllCsvSchedules(routes, opts = {}) {
   const concurrency = opts.concurrency ?? 4;
   const loadFn = opts.loadFn ?? fetchCtpCsv;
 
+  // Reset the module-level WAF counters at the start of each call so
+  // the aggregate reflects THIS call's fetches. fetchCtpCsv's
+  // wafWarnDedup writes to these directly; the in-process constraint
+  // is that no other code path is running concurrent fetchCtpCsv calls
+  // while this function is in flight. In production the only caller is
+  // ingestBuild (which calls fetchAllCsvSchedules exactly once), and
+  // tests inject loadFn to bypass fetchCtpCsv entirely. See
+  // docs/quirks-and-rules.md#ctp-csv-waf-counter for rationale.
+  _wafSeen.clear();
+  _wafLogged = 0;
+  _wafTotal = 0;
+
   /** @type {Array<() => Promise<void>>} */
   const tasks = [];
   /** @type {Map<string, Map<string, CtpCsvSchedule>>} */
@@ -209,11 +233,11 @@ export async function fetchAllCsvSchedules(routes, opts = {}) {
       // Canonicalize the shortName here so the byRouteService map key,
       // the CSV-IO call, and the warning text all agree on one name.
       // Callers can pass either catalog-side name (`39C` from Tranzy,
-      // `39 CREIC` from Transitous) — both resolve to `39CREIC`.
+      // `39 CREIC` from Transitous) - both resolve to `39CREIC`.
       const shortName = canonicalShortName(route.shortName);
       const serviceId = serviceIdMap[svcKey] ?? svcKey.toUpperCase();
       // Wrap in a function so the load only starts when the worker dequeues
-      // it — otherwise all tasks would kick off concurrently before the
+      // it - otherwise all tasks would kick off concurrently before the
       // concurrency cap could bite.
       tasks.push(async () => {
         const parsed = await Promise.resolve(loadFn(shortName, svcKey, opts));
@@ -239,6 +263,25 @@ export async function fetchAllCsvSchedules(routes, opts = {}) {
     },
   );
   await Promise.all(workers);
+
+  // WAF fail-fast: aggregate non-CSV responses across this call. Any
+  // single WAF is a signal that CTP is serving something other than
+  // CSV - typically a captcha / maintenance / IP-block page. Building
+  // from a partial CSV set silently ships a degraded feed (verified
+  // bug, 12:49 UTC 2026-07-05 - see fail-fast doc comment above).
+  // Throw with an actionable message; the publisher's STRICT=true
+  // re-throws and the daily cron exits non-zero. Operator re-runs.
+  const totalAttempts = tasks.length;
+  if (_wafTotal > 0) {
+    throw new Error(
+      `CTP CSV scrape aborted: ${_wafTotal} of ${totalAttempts} ` +
+      `(${Math.round((_wafTotal / Math.max(1, totalAttempts)) * 100)}%) ` +
+      `fetch(es) returned a non-CSV body (WAF / captcha / maintenance page). ` +
+      `Scraped ${byRouteService.size} routes successfully before aborting. ` +
+      `Re-run the daily cron when CTP responds cleanly - do NOT loosen the WAF ` +
+      `detection (CTP's WAF rotates fingerprints; the right fix is upstream).`,
+    );
+  }
 
   return { byRouteService, warnings };
 }

@@ -7,6 +7,16 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+// Module-level state shared between the vi.mock factory below and
+// the per-test override for the WAF fail-fast case. vi.hoisted runs
+// before any imports (including the vi.mock factory), so the same
+// object reference is visible from both sides.
+const ctpMockState = vi.hoisted(() => ({
+  // When set, fetchAllCsvSchedules throws this on the next call.
+  // Reset to null at the start of every test that doesn't need it.
+  throwOnNext: null as Error | null,
+}));
+
 // Mock Tranzy + Transitous + CTP so the test exercises only the
 // orchestration in src/ingest/index.ts. The mocks use the existing
 // fixture data via the seed-builder helper, so the produced zip is
@@ -63,6 +73,16 @@ vi.mock('../../src/sources/ctp-csv/index.ts', async (importOriginal) => {
 
   return {
     fetchAllCsvSchedules: async (routes, opts) => {
+      // Per-test override hook - the WAF fail-fast test sets
+      // ctpMockState.throwOnNext to a real WAF-shaped error before
+      // calling ingestBuild, and the mock throws that here. Tests
+      // that don't touch ctpMockState get the default happy-path
+      // fixture load (the original mock behaviour).
+      if (ctpMockState.throwOnNext) {
+        const err = ctpMockState.throwOnNext;
+        ctpMockState.throwOnNext = null;
+        throw err;
+      }
       const byRouteService = new Map();
       for (const [shortName, bySvc] of Object.entries(fixtures.csv || {})) {
         const m = new Map();
@@ -115,14 +135,14 @@ describe('ingestBuild', () => {
     const fs = readFileSync(result.zipPath);
     expect(fs.equals(result.zip)).toBe(true);
 
-    // PK signature check — verify zip magic bytes.
+    // PK signature check - verify zip magic bytes.
     expect(result.zip[0]).toBe(0x50); // 'P'
     expect(result.zip[1]).toBe(0x4b); // 'K'
   });
 
   it('applies adapter-level defaults when agencyId/serviceKeys/rateLimitMs are omitted', async () => {
     // The mock TranzyClient exposes the opts the ingestBuild()
-    // function actually fed it. Defaults must flow through — if a
+    // function actually fed it. Defaults must flow through - if a
     // future refactor drops the `DEFAULT_AGENCY_ID` constant,
     // lastTranzyOpts.agencyId will be undefined and this test fails.
     const { state } = await import('../../src/sources/tranzy/index.ts');
@@ -140,5 +160,28 @@ describe('ingestBuild', () => {
     expect(state.lastTranzyOpts.agencyId).toBe('2'); // DEFAULT_AGENCY_ID
     expect(state.lastTranzyOpts.rateLimitMs).toBe(500); // TranzyClient default
     expect(state.lastTranzyOpts.apiKey).toBe('fake');
+  });
+
+  it('propagates WAF fail-fast from fetchAllCsvSchedules', async () => {
+    // 12:49 UTC 2026-07-05 incident: CTP's WAF served captcha HTML
+    // for every CSV fetch and the build silently shipped a feed with
+    // 6% of its trips. fetchAllCsvSchedules now throws when ANY WAF
+    // response is detected; ingestBuild must propagate the throw so
+    // the orchestrator's STRICT=true handling fails the daily cron
+    // loudly instead of publishing degraded data.
+    ctpMockState.throwOnNext = new Error(
+      'CTP CSV scrape aborted: 6 of 6 (100%) fetch(es) returned a non-CSV body ' +
+      '(WAF / captcha / maintenance page). Scraped 0 routes successfully before aborting. ' +
+      'Re-run the daily cron when CTP responds cleanly - do NOT loosen the WAF ' +
+      'detection (CTP\'s WAF rotates fingerprints; the right fix is upstream).',
+    );
+
+    await expect(
+      ingestBuild({
+        outputDir: join(WORK, 'waf-fail-fast'),
+        secrets: { TRANZY_API_KEY: 'fake' },
+        ctp: { serviceKeys: ['lv', 's'] },
+      }),
+    ).rejects.toThrow(/CTP CSV scrape aborted.*WAF.*captcha.*maintenance/);
   });
 });

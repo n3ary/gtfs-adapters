@@ -1,16 +1,16 @@
 /**
- * ingest.ts — programmatic fetch + reconcile + zip build for an
+ * ingest.ts - programmatic fetch + reconcile + zip build for an
  * adapter-driven feed.
  *
  * `ingestBuild(opts)` is the single-call entry the orchestrator uses
  * to acquire the upstream GTFS zip for an adapter-driven feed. The
  * orchestrator calls `${publisher}/ingest`'s default export (always
- * named `ingestBuild`) with no feed-specific knowledge — every piece
+ * named `ingestBuild`) with no feed-specific knowledge - every piece
  * of static config (agencyId, serviceKeys, rateLimitMs, calendarDays)
  * lives in this module's defaults; secrets come through `opts.secrets`
  * keyed by env var name (the feed config declares which ones it needs).
  *
- * What it does (typical flow — may vary per adapter):
+ * What it does (typical flow - may vary per adapter):
  *   1. Load a baseline seed (e.g. Transitous).
  *   2. Query a primary upstream source (e.g. Tranzy's static API).
  *   3. Reconcile additional sources (e.g. operator CSVs).
@@ -19,7 +19,7 @@
  *
  * What it does NOT do (consumer responsibilities):
  *   - R2 uploads (lives in the orchestrator).
- *   - makeSqlite (orchestrator — needs the StaticExtension from this
+ *   - makeSqlite (orchestrator - needs the StaticExtension from this
  *     same package's `static` subpath).
  *   - Cache invalidation (orchestrator's content-addressed hash).
  */
@@ -45,7 +45,7 @@ import { writeGtfsZip } from '../gtfs.ts';
 export const REQUIRED_SECRETS = ['TRANZY_API_KEY'] as const;
 
 /**
- * Adapter-level defaults — single source of truth for feed-specific
+ * Adapter-level defaults - single source of truth for feed-specific
  * constants that used to leak into the orchestrator. Override only
  * when running against a non-production feed (e.g. a smoke fixture).
  */
@@ -62,7 +62,7 @@ export const DEFAULT_SERVICE_KEYS = CSV_SERVICE_KEYS;
  * `outputDir` is the staging directory the adapter writes the
  * intermediate build artifacts into (.build-input/csv/, .build-input/
  * csv-status.json, and the final .zip). The caller chooses where
- * — typically a workflow-scoped tmp dir; left behind for log/debug.
+ * - typically a workflow-scoped tmp dir; left behind for log/debug.
  *
  * `buildDate` lets tests pin the clock; omit in production.
  */
@@ -101,7 +101,7 @@ export type IngestResult = {
  *   - upstream fetch failures from CSV scraping (status >= 400 on
  *     the source server is treated as fatal by fetchAllCsvSchedules).
  *
- * Primary API failures are non-fatal (logged as a warning) — the
+ * Primary API failures are non-fatal (logged as a warning) - the
  * feed can still be built from seed + CSV alone, mirroring the
  * legacy CLI's behavior on upstream outage.
  */
@@ -128,7 +128,7 @@ export async function ingestBuild(opts: IngestOptions): Promise<IngestResult> {
   // 1. Seed.
   const seed = await loadTransitousSeed(seedUrl ? { url: seedUrl } : {});
 
-  // 2. Primary upstream API (best-effort — fails soft).
+  // 2. Primary upstream API (best-effort - fails soft).
   const tranzy = new TranzyClient({
     apiKey,
     agencyId,
@@ -146,7 +146,20 @@ export async function ingestBuild(opts: IngestOptions): Promise<IngestResult> {
     console.warn(`[tranzy] fetchAll failed: ${err.message || err}; continuing with seed-only`);
   }
 
-  // 3. CSV reconcile (status >= 400 is fatal — surfaced by fetchAllCsvSchedules).
+  // 3. CSV reconcile.
+  //
+  // Failures from this stage:
+  //   - WAF / non-CSV responses (200 OK with captcha / maintenance /
+  //     IP-block HTML body): fatal via fetchAllCsvSchedules's
+  //     aggregate check - any single non-CSV body throws and aborts
+  //     the build. Caught and re-thrown by the orchestrator under
+  //     STRICT=true (daily.yml always sets this). Prevents shipping
+  //     a degraded feed (12:49 UTC 2026-07-05 incident: CTP's WAF
+  //     ate every CSV fetch, build passed silently with 6% of
+  //     expected trips - surfaced downstream as "no stops near me").
+  //   - 404 / network error / per-route gaps: soft (returns null
+  //     for that route, downstream uses Tranzy fallback).
+  //
   // Default to live fetching CSVs from the CTP server. Pass
   // `opts.ctp.fetchFn` to override (e.g. tests inject a fixture reader).
   const csv = await fetchAllCsvSchedules(seed.routes, {
@@ -167,7 +180,7 @@ export async function ingestBuild(opts: IngestOptions): Promise<IngestResult> {
     const { emitGroupedWarnings } = await import('../lib/log-severity.js');
     const counts = emitGroupedWarnings(warnings);
     console.log(
-      `[reconcile] ${warnings.length} total — ${counts.info} info, ${counts.warn} warn, ${counts.error} error`,
+      `[reconcile] ${warnings.length} total - ${counts.info} info, ${counts.warn} warn, ${counts.error} error`,
     );
   } else {
     console.log('[reconcile] 0 warnings');
@@ -181,7 +194,7 @@ export async function ingestBuild(opts: IngestOptions): Promise<IngestResult> {
   }
   const zip = readFileSync(zipPath);
   console.log(
-    `[done] ${zipPath} (${(sizeBytes / 1024).toFixed(1)} KB) — ` +
+    `[done] ${zipPath} (${(sizeBytes / 1024).toFixed(1)} KB) - ` +
     `${stats.routes} routes, ${stats.stops} stops, ${stats.shapes} shapes, ` +
     `${stats.trips} trips, ${stats.stopTimes} stop_times`,
   );
