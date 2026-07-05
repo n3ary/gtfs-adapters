@@ -6,10 +6,10 @@
  * call; we hand it a function that returns our quirk for the
  * `cluj-napoca` feed and undefined for everything else.
  */
-import { clujRtQuirk, parseClujTripId } from './cluj.ts';
+import { clujQuirk, parseClujTripId } from './cluj.ts';
 import type { ClujQuirk } from './cluj.ts';
 
-export { clujRtQuirk, parseClujTripId };
+export { clujQuirk, parseClujTripId };
 export type { ClujQuirk };
 
 /**
@@ -17,10 +17,10 @@ export type { ClujQuirk };
  * feed IDs, undefined for others. The proxy loads this at startup.
  *
  *   const quirks = new Map<string, ClujQuirk>();
- *   registerRtQuirks((feedId) => feedId === 'cluj-napoca' ? clujRtQuirk : undefined);
+ *   registerRtQuirks((feedId) => feedId === 'cluj-napoca' ? clujQuirk : undefined);
  *   const q = quirks.get('cluj-napoca')!;  // our quirk
  */
 export function registerRtQuirks(register: (quirkFor: (feedId: string) => ClujQuirk | undefined) => void): void {
   const CLUJ_FEED_ID = 'cluj-napoca';
-  register((feedId) => (feedId === CLUJ_FEED_ID ? clujRtQuirk : undefined));
+  register((feedId) => (feedId === CLUJ_FEED_ID ? clujQuirk : undefined));
 }

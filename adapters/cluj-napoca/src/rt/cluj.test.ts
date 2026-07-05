@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import GtfsRealtimeBindings from 'gtfs-realtime-bindings';
-import { clujRtQuirk, parseClujTripId } from './cluj.ts';
+import { clujQuirk, parseClujTripId } from './cluj.ts';
 
 function makeEntity(tripId: string, directionId: number, startTime: string) {
   return GtfsRealtimeBindings.transit_realtime.FeedEntity.create({
@@ -42,24 +42,24 @@ describe('parseClujTripId', () => {
   });
 });
 
-describe('clujRtQuirk', () => {
+describe('clujQuirk', () => {
   it('recovers direction_id + start_time when upstream is wrong', () => {
     const msg = makeMessage(makeEntity('38_0_weekday_2_1430', 0, ''));
-    const out = clujRtQuirk(msg);
+    const out = clujQuirk(msg);
     expect(out.entity[0]!.vehicle!.trip!.directionId).toBe(0);
     expect(out.entity[0]!.vehicle!.trip!.startTime).toBe('14:30:00');
   });
 
   it('leaves already-correct entities alone', () => {
     const msg = makeMessage(makeEntity('38_0_weekday_2_1430', 1, '14:30:00'));
-    const out = clujRtQuirk(msg);
+    const out = clujQuirk(msg);
     expect(out.entity[0]!.vehicle!.trip!.directionId).toBe(1);
     expect(out.entity[0]!.vehicle!.trip!.startTime).toBe('14:30:00');
   });
 
   it('leaves unparseable trip_ids alone', () => {
     const msg = makeMessage(makeEntity('weird-trip-id', 0, ''));
-    const out = clujRtQuirk(msg);
+    const out = clujQuirk(msg);
     expect(out.entity[0]!.vehicle!.trip!.directionId).toBe(0);
     expect(out.entity[0]!.vehicle!.trip!.startTime).toBe('');
   });
