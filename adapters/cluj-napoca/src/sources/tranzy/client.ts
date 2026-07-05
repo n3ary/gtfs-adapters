@@ -16,7 +16,7 @@
  *   - No external HTTP deps.
  */
 
-const USER_AGENT = 'cluj-napoca-gtfs-adapter/0.1 (+https://github.com/ciotlosm/cluj-napoca-gtfs-adapter)';
+const USER_AGENT = 'cluj-napoca-gtfs-adapter/0.3.3 (+https://github.com/n3ary/gtfs-adapters/tree/main/adapters/cluj-napoca)';
 
 export class TranzyError extends Error {
   endpoint: string | undefined;
