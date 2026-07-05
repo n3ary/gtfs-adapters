@@ -67,17 +67,36 @@ export function buildNetworks(routes) {
   /** @type {string[]} */
   const routeNetworkRows = [];
 
+  // Per GTFS spec, a route can belong to AT MOST ONE network. The
+  // route_desc → category mapping can legitimately classify a route
+  // under multiple categories (e.g. "Transport Elevi, Metropolitan"
+  // — both match — see applyRouteCategory in routeCategory.js), which
+  // would emit multiple route_networks rows for the same route_id
+  // and violate the PRIMARY KEY (route_id) on route_networks.
+  //
+  // Dedup by route_id: first category wins. This preserves the more
+  // specific network (Transport Elevi) over the more general one
+  // (Metropolitan), since categories are ordered with specific ones
+  // first in getAllCategories(). networkUsage still counts every
+  // classification — only the emitted row is deduped — so build-log
+  // INFO summaries stay accurate.
+  const seenRouteIds = new Set<string>();
   for (const r of routes) {
     const desc = (r.route_desc ?? '').toString();
     if (!desc) continue; // regular urban — no network assignment
     const labels = desc.split(',').map((s) => s.trim()).filter(Boolean);
     if (labels.length === 0) continue;
+    if (seenRouteIds.has(r.route_id)) continue;
     for (const label of labels) {
       const cat = byLabel.get(label);
       if (!cat) continue; // route_desc isn't a known label — shouldn't happen
       networkUsage.set(cat.id, (networkUsage.get(cat.id) ?? 0) + 1);
       routeNetworkRows.push(`${cat.id},${r.route_id}`);
+      // First category wins; break after the first hit so more
+      // specific labels take precedence over general ones.
+      break;
     }
+    seenRouteIds.add(r.route_id);
   }
 
   // Only emit network rows that are actually used — keeps the file lean.

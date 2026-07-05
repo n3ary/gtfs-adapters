@@ -263,18 +263,24 @@ describe('reconcile', () => {
       'metroline,Metropolitan\n',
     );
 
-    // route_networks.txt — one row per categorized route. M76A (route_id 145)
-    // is now BOTH school AND metroline (long_name "TE2 Floresti" matches the
-    // school TE-prefix check we re-added). M26U (route_id 68) still has
-    // 1:many via Untold + M* prefix. Regular urban route 1 excluded;
-    // M26 (seed) included as metroline.
+    // route_networks.txt — one row per categorized route, AT MOST one
+    // network per route_id (GTFS spec: a route can belong to at most
+    // one network; the spec DDL enforces this with PRIMARY KEY on
+    // route_id). When a route matches multiple categories
+    // (e.g. M76A / route_id 145 matches both school + metroline
+    // because its long_name "TE2 Floresti" hits the school TE-prefix
+    // check), the first matching category wins — `school` in
+    // getAllCategories() order, which puts specific labels before
+    // general ones. Previously, INSERT OR IGNORE in the orchestrator
+    // silently dropped duplicates; now the adapter dedupes before
+    // writing so the DB constraint doesn't surface.
     const rnLines = files['route_networks.txt'].trim().split('\n');
     expect(rnLines[0]).toBe('network_id,route_id');
     expect(rnLines).toContain('school,93');
-    expect(rnLines).toContain('school,145'); // M76A is BOTH school + metroline
-    expect(rnLines).toContain('metroline,145');
+    expect(rnLines).toContain('school,145'); // first match wins (specific > general)
+    expect(rnLines).not.toContain('metroline,145'); // deduped — school won
     expect(rnLines).toContain('festival,68');
-    expect(rnLines).toContain('metroline,68'); // M26U also metroline
+    expect(rnLines).not.toContain('metroline,68'); // deduped — festival won
     expect(rnLines).toContain('night,15');
     expect(rnLines).toContain('special,205');
     expect(rnLines).toContain('metroline,M26');
