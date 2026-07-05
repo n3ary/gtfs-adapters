@@ -4,11 +4,11 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { fetchToFile, assertSeedZipBody } from '../src/lib/seed.ts';
+import { fetchToFile } from '../src/lib/seed.ts';
+import { ZIP_MAGIC } from '@n3ary/gtfs-spec/waf';
 
 const URL = 'https://api.transitous.org/gtfs/ro_Cluj-Napoca.gtfs.zip';
 
-const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 const VALID_ZIP_HEAD = Buffer.concat([ZIP_MAGIC, Buffer.alloc(26, 0)]);
 
 // Real-world Cloudflare challenge page (close-enough excerpt).
@@ -24,49 +24,13 @@ const CF_CHALLENGE = `<!DOCTYPE html>
 // Generic WAF error page (no Cloudflare marker but obviously HTML).
 const GENERIC_WAF = `<!doctype html><html><body>Access denied - request blocked.</body></html>`;
 
-describe('assertSeedZipBody', () => {
-  it('passes a real-looking ZIP body through unchanged', () => {
-    expect(() => assertSeedZipBody(VALID_ZIP_HEAD, URL)).not.toThrow();
-  });
+describe('fetchToFile (seed-side WAF guard)', () => {
+  // The actual WAF detection logic lives in @n3ary/gtfs-spec/waf
+  // and is covered exhaustively by packages/spec/test/waf.test.ts
+  // in the gtfs-publisher repo. These tests only pin the
+  // seed.ts-specific wiring: that fetchToFile uses the shared
+  // guard, and the disk-level "no orphan file" contract holds.
 
-  it('throws on a Cloudflare challenge page (cf-mitigated marker)', () => {
-    // First marker match wins; "<!doctype html" appears earlier in
-    // the buffer than "cf-mitigated" so it's what fires. The test
-    // pins "any WAF marker throws" rather than "this specific
-    // marker throws" - any future marker-list change shouldn't
-    // break this contract.
-    expect(() => assertSeedZipBody(Buffer.from(CF_CHALLENGE), URL))
-      .toThrow(/contains ".*" marker/);
-  });
-
-  it('throws on a generic WAF error page (doctype marker)', () => {
-    expect(() => assertSeedZipBody(Buffer.from(GENERIC_WAF), URL))
-      .toThrow(/contains "<!doctype html" marker/);
-  });
-
-  it('throws on body that is neither zip nor HTML (truncated / garbage)', () => {
-    expect(() => assertSeedZipBody(Buffer.from('just some random bytes'), URL))
-      .toThrow(/not a ZIP file/);
-  });
-
-  it('throws on a too-short buffer with no markers', () => {
-    expect(() => assertSeedZipBody(Buffer.from([0x00, 0x01]), URL))
-      .toThrow(/not a ZIP file/);
-  });
-
-  it('does NOT throw on a ZIP whose first KB happens to contain a marker substring', () => {
-    // Defensive: a zip with the bytes "forbidden" somewhere in its
-    // first KB shouldn't trip the guard (PK magic is checked first,
-    // so we return early). This is the "happy path wins" contract.
-    const weirdButValidZip = Buffer.concat([
-      ZIP_MAGIC,
-      Buffer.from('forbidden <html> but still a real zip'),
-    ]);
-    expect(() => assertSeedZipBody(weirdButValidZip, URL)).not.toThrow();
-  });
-});
-
-describe('fetchToFile', () => {
   it('writes a real ZIP body to disk unchanged', async () => {
     const tmp = mkdtempSync(join(tmpdir(), 'seedFetchToFile-'));
     const dest = join(tmp, 'seed.zip');
@@ -82,8 +46,8 @@ describe('fetchToFile', () => {
   });
 
   it('does NOT write a Cloudflare challenge page to disk (no orphan file)', async () => {
-    // The exact pattern that crashed 'stops near me' today.
-    // Transitous responded HTTP 200 + CF challenge HTML; fetchToFile
+    // The exact pattern that crashed 'stops near me' on 2026-07-05:
+    // Transitous returned HTTP 200 + CF challenge HTML; fetchToFile
     // used to write the HTML to seed.zip; the unzip step then either
     // failed loudly downstream or parsed garbage rows; the resulting
     // GTFS shipped to consumers crashed the app on bogus data.
