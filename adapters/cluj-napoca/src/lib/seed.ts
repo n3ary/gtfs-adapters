@@ -74,9 +74,13 @@ export async function loadSeed(source, opts = {}) {
   }
 
   const agencyTxt = readFileSync(join(seedDir, 'agency.txt'), 'utf8');
-  const routesRows = parseRoutes(readFileSync(join(seedDir, 'routes.txt'), 'utf8'));
-  const stopsRows = parseStops(readFileSync(join(seedDir, 'stops.txt'), 'utf8'));
-  const tripsRows = parseTrips(readFileSync(join(seedDir, 'trips.txt'), 'utf8'));
+  // parseRoutes/Stops/Trips return Promises (see @n3ary/gtfs-spec/src/spec).
+  // await them before using the arrays.
+  const [routesRows, stopsRows, tripsRows] = await Promise.all([
+    parseRoutes(readFileSync(join(seedDir, 'routes.txt'), 'utf8')),
+    parseStops(readFileSync(join(seedDir, 'stops.txt'), 'utf8')),
+    parseTrips(readFileSync(join(seedDir, 'trips.txt'), 'utf8')),
+  ]);
   // stop_times.txt routinely exceeds 500 MB on national feeds; use the
   // streaming reader and collect into the trip_id-keyed map directly.
   const stopTimes = new Map();
