@@ -1,6 +1,6 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 
-import { type RouteRow } from '@n3ary/gtfs-spec/spec';
+import { type RouteRow, networksToTxt, routeNetworksToTxt } from '@n3ary/gtfs-spec/spec';
 
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 /**
@@ -28,6 +28,12 @@ import { type RouteRow } from '@n3ary/gtfs-spec/spec';
  * **Empty case**: if no routes match any category, both files are empty
  * strings (the orchestrator in `src/assemble/index.js` drops empty
  * optional files from the published zip).
+ *
+ * Writers: `networksToTxt` + `routeNetworksToTxt` come from
+ * `@n3ary/gtfs-spec/serialize` (spec 0.5.3+). They give us RFC 4180
+ * quoting for free; before this we hand-rolled the CSV bodies with
+ * template literals, which would silently mis-quote any network_name
+ * containing a comma.
  */
 
 import { getAllCategories } from '../merge/routeCategory.ts';
@@ -64,7 +70,7 @@ export function buildNetworks(routes) {
   /** @type {Map<string, number>} */
   const networkUsage = new Map();
 
-  /** @type {string[]} */
+  /** @type {Array<[string, string]>} */
   const routeNetworkRows = [];
 
   // Per GTFS spec, a route can belong to AT MOST ONE network. The
@@ -91,7 +97,7 @@ export function buildNetworks(routes) {
       const cat = byLabel.get(label);
       if (!cat) continue; // route_desc isn't a known label — shouldn't happen
       networkUsage.set(cat.id, (networkUsage.get(cat.id) ?? 0) + 1);
-      routeNetworkRows.push(`${cat.id},${r.route_id}`);
+      routeNetworkRows.push([cat.id, r.route_id]);
       // First category wins; break after the first hit so more
       // specific labels take precedence over general ones.
       break;
@@ -102,17 +108,10 @@ export function buildNetworks(routes) {
   // Only emit network rows that are actually used — keeps the file lean.
   const networkRows = allCategories
     .filter((c) => networkUsage.has(c.id))
-    .map((c) => `${c.id},${c.label}`);
+    .map((c) => [c.id, c.label] as [string, string]);
 
-  const networksTxt =
-    networkRows.length === 0
-      ? ''
-      : ['network_id,network_name', ...networkRows].join('\n') + '\n';
-
-  const routeNetworksTxt =
-    routeNetworkRows.length === 0
-      ? ''
-      : ['network_id,route_id', ...routeNetworkRows].join('\n') + '\n';
+  const networksTxt = networksToTxt(networkRows);
+  const routeNetworksTxt = routeNetworksToTxt(routeNetworkRows);
 
   return { networksTxt, routeNetworksTxt, networkUsage };
 }

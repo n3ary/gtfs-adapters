@@ -147,9 +147,8 @@ export async function ingestBuild(opts: IngestOptions): Promise<IngestResult> {
   }
 
   // 3. CSV reconcile (status >= 400 is fatal — surfaced by fetchAllCsvSchedules).
-  // Default to fetching CSVs on demand from the CTP server. Pass
-  // `opts.ctp.fetchFn` to override (e.g. tests inject `readCtpCsvFromDisk`
-  // to read pre-staged CSV fixtures from .build-input/csv/).
+  // Default to live fetching CSVs from the CTP server. Pass
+  // `opts.ctp.fetchFn` to override (e.g. tests inject a fixture reader).
   const csv = await fetchAllCsvSchedules(seed.routes, {
     loadFn: fetchFn ?? fetchCtpCsv,
     serviceKeys,

@@ -1,32 +1,23 @@
 {
   "name": "@n3ary/gtfs-adapter-cluj-napoca",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "description": "Cluj-Napoca (CTP) GTFS adapter — per-feed knowledge for the n3ary family. Reconciles Transitous seed + Tranzy.ai + CTP CSV into a clean GTFS zip, registers RT quirks with the generic gtfs-rt proxy. See https://github.com/n3ary/gtfs-adapters.",
   "license": "PolyForm-Noncommercial-1.0.0",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/ingest/index.js",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+    "./ingest": {
+      "types": "./dist/ingest/index.d.ts",
+      "import": "./dist/ingest/index.js"
     },
     "./static": {
       "types": "./dist/static/index.d.ts",
       "import": "./dist/static/index.js"
     },
-    "./ingest": {
-      "types": "./dist/ingest/index.d.ts",
-      "import": "./dist/ingest/index.js"
-    },
     "./rt": {
       "types": "./dist/rt/index.d.ts",
       "import": "./dist/rt/index.js"
-    },
-    "./cli": "./dist/cli.js"
-  },
-  "bin": {
-    "cluj-napoca-gtfs": "./dist/cli.js"
+    }
   },
   "files": [
     "dist",
@@ -34,16 +25,9 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && chmod +x dist/cli.js",
-    "build:check": "tsc -p tsconfig.build.json --noEmit && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "build": "tsc -p tsconfig.build.json",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
-    "build:run": "tsx src/cli.ts build",
-    "build:full": "pnpm fetch:csv && pnpm build:run",
-    "validate": "tsx src/cli.ts validate",
-    "reconcile:dry": "tsx src/cli.ts reconcile --dry-run",
-    "fetch:csv": "tsx scripts/fetch-stage.ts",
-    "inspect:404s": "tsx scripts/inspect-404s.ts",
-    "smoke:trip-ids": "tsx src/verify-rt-parity.ts",
+    "smoke:trip-ids": "tsx src/verify-trip-id-format.ts",
     "test": "vitest --run",
     "test:watch": "vitest",
     "lint": "eslint src/ tests/",
@@ -58,7 +42,7 @@
     "registry": "https://npm.pkg.github.com"
   },
   "dependencies": {
-    "@n3ary/gtfs-spec": "^0.5.0",
+    "@n3ary/gtfs-spec": "^0.5.3",
     "archiver": "^8.0.0",
     "gtfs-realtime-bindings": "^1.1.1"
   },

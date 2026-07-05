@@ -11,8 +11,8 @@ importers:
   adapters/cluj-napoca:
     dependencies:
       '@n3ary/gtfs-spec':
-        specifier: ^0.5.0
-        version: 0.5.0
+        specifier: ^0.5.3
+        version: 0.5.3
       archiver:
         specifier: ^8.0.0
         version: 8.0.0
@@ -286,8 +286,8 @@ packages:
     resolution: {integrity: sha512-TuB0x50EoAvEX/UEWITd8Mkn3WhiTjSvbTMCLj0BhsQEl5iUzjXdA0bETEVpTk+5TGTLR6QktI9H4hLviVeaAQ==}
     engines: {node: '>=v12.0.0'}
 
-  '@n3ary/gtfs-spec@0.5.0':
-    resolution: {integrity: sha512-run9ouZ5chL74CDP5Rt9OSHnXG4hY8Ss9rMBlfvtXv5/HGg9UcmYKRSxufyKs0gD7z8L4AwzqUvXBfkuh9OcjA==, tarball: https://npm.pkg.github.com/download/@n3ary/gtfs-spec/0.5.0/8505e13ce68a550fc607129c23d5ee312d0cb2d9}
+  '@n3ary/gtfs-spec@0.5.3':
+    resolution: {integrity: sha512-q3SNTS+7Zttf9m4sd+APUdsmJUYjZUycsWHrXMyH7+SWCus8ZeqKJq+wIwQcg2LL6i4d1zSd/d0zMYDphkRSNw==, tarball: https://npm.pkg.github.com/download/@n3ary/gtfs-spec/0.5.3/1e9e1718240c6f86427508e16c0b2655781020f0}
 
   '@napi-rs/wasm-runtime@1.1.6':
     resolution: {integrity: sha512-ZLv/JdUfkvOy9eCnnBaGfiO+XimbjebAeO+MRQqD/B+FR1tnRN0tpKSJHRbE8sFfS6aqsXZ67TQjfwfsxULVbg==}
@@ -1624,7 +1624,7 @@ snapshots:
     dependencies:
       lodash: 4.18.1
 
-  '@n3ary/gtfs-spec@0.5.0':
+  '@n3ary/gtfs-spec@0.5.3':
     dependencies:
       csv-parse: 7.0.1
       csv-stringify: 6.8.1
