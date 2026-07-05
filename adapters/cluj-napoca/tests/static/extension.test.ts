@@ -7,13 +7,13 @@ import { tmpdir } from 'node:os';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 
 import {
-  clujStaticExtension,
-  applyClujStaticPostLoad,
+  staticExtension,
+  applyStaticPostLoad,
 } from '../../src/static/index';
 import { SCHEMA } from '@n3ary/gtfs-spec/sql';
 
 /**
- * End-to-end check of clujStaticExtension applied to a SQLite built
+ * End-to-end check of staticExtension applied to a SQLite built
  * from a synthetic GTFS zip. Verifies:
  *   1. networks.network_color column was added (DDL landed)
  *   2. routes.route_color was substituted by the fixup
@@ -21,7 +21,7 @@ import { SCHEMA } from '@n3ary/gtfs-spec/sql';
  *   4. _neary_config exists with the right rows from feedConfig.timing
  */
 
-const WORK = join(tmpdir(), `cluj-static-ext-${Date.now()}`);
+const WORK = join(tmpdir(), `adapter-static-ext-${Date.now()}`);
 const SQLITE_PATH = join(WORK, 'feeds.sqlite3');
 const SQLITE_GZ = join(WORK, 'feeds.sqlite3.gz');
 
@@ -63,7 +63,7 @@ function readSqlite(): Database.Database {
   return db;
 }
 
-function runExtension(ext: ReturnType<typeof clujStaticExtension>): Database.Database {
+function runExtension(ext: ReturnType<typeof staticExtension>): Database.Database {
   // Re-open rw so the extension can UPDATE rows.
   const db = new Database(SQLITE_PATH);
   try {
@@ -87,8 +87,8 @@ function runExtension(ext: ReturnType<typeof clujStaticExtension>): Database.Dat
     const routes = db.prepare('SELECT * FROM routes').all() as Array<Record<string, unknown>>;
     const networks = db.prepare('SELECT * FROM networks').all() as Array<Record<string, unknown>>;
     const routeNetworks = db.prepare('SELECT * FROM route_networks').all() as Array<Record<string, unknown>>;
-    applyClujStaticPostLoad(db, {
-      feedId: 'cluj-napoca',
+    applyStaticPostLoad(db, {
+      feedId: 'test',
       routes,
       networks,
       routeNetworks,
@@ -109,9 +109,9 @@ afterAll(() => {
   rmSync(WORK, { recursive: true, force: true });
 });
 
-describe('clujStaticExtension', () => {
+describe('staticExtension', () => {
   it('adds networks.network_color + _neary_config + applies route fixup + computes network colors', async () => {
-    const ext = clujStaticExtension({ timing: TIMING_BLOCK });
+    const ext = staticExtension({ timing: TIMING_BLOCK });
     expect(ext.columnExtensions).toEqual([
       { table: 'networks', column: ['network_color', 'TEXT'] },
     ]);
@@ -150,7 +150,7 @@ describe('clujStaticExtension', () => {
     // Reset to a clean state (no prior run's UPDATEs).
     rmSync(WORK, { recursive: true, force: true });
     buildSyntheticSqlite();
-    const ext = clujStaticExtension({});
+    const ext = staticExtension({});
     expect((ext.tableExtensions?._neary_config?.rows?.length ?? 0)).toBe(0);
 
     const db = runExtension(ext);

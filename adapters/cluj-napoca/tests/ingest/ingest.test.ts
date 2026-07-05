@@ -86,15 +86,13 @@ beforeAll(() => mkdirSync(WORK, { recursive: true }));
 afterAll(() => rmSync(WORK, { recursive: true, force: true }));
 
 describe('ingestBuild', () => {
-  it('throws when tranzy.apiKey is missing', async () => {
+  it('throws when secrets.TRANZY_API_KEY is missing', async () => {
     await expect(
       ingestBuild({
         outputDir: join(WORK, 'no-key'),
-        tranzy: { apiKey: '', agencyId: '2' },
-        transitous: {},
-        ctp: { serviceKeys: ['lv', 's', 'd'] },
+        secrets: { TRANZY_API_KEY: '' },
       }),
-    ).rejects.toThrow(/tranzy\.apiKey is required/);
+    ).rejects.toThrow(/TRANZY_API_KEY is required/);
   });
 
   it('runs end-to-end with mocked sources, returning a Buffer containing a real gtfs.zip', async () => {
@@ -102,8 +100,7 @@ describe('ingestBuild', () => {
     const result = await ingestBuild({
       outputDir: outDir,
       outputName: 'fixture.gtfs.zip',
-      tranzy: { apiKey: 'fake', agencyId: '2', rateLimitMs: 1 },
-      transitous: {},
+      secrets: { TRANZY_API_KEY: 'fake' },
       ctp: { serviceKeys: ['lv', 's', 'd'] },
       calendarDays: 30,
       buildDate: new Date('2026-06-29T12:00:00Z'),
@@ -125,7 +122,7 @@ describe('ingestBuild', () => {
   it('applies adapter-level defaults when agencyId/serviceKeys/rateLimitMs are omitted', async () => {
     // The mock TranzyClient exposes the opts the ingestBuild()
     // function actually fed it. Defaults must flow through — if a
-    // future refactor drops the `?? DEFAULT_AGENCY_ID` fallback,
+    // future refactor drops the `DEFAULT_AGENCY_ID` constant,
     // lastTranzyOpts.agencyId will be undefined and this test fails.
     const { state } = await import('../../src/sources/tranzy/index.ts');
     state.lastTranzyOpts = null;
@@ -133,11 +130,8 @@ describe('ingestBuild', () => {
     const outDir = join(WORK, 'defaults');
     const result = await ingestBuild({
       outputDir: outDir,
-      // Note: no agencyId, no rateLimitMs.
-      tranzy: { apiKey: 'fake' },
-      // Note: no ctp block at all.
-      // Note: no transitous block at all.
-      // Note: no calendarDays, no buildDate.
+      secrets: { TRANZY_API_KEY: 'fake' },
+      // Note: no ctp block, no transitous block, no calendarDays, no buildDate.
     });
 
     expect(result.sizeBytes).toBeGreaterThan(0);

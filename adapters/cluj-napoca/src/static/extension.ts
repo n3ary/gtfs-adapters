@@ -1,17 +1,20 @@
 /**
- * clujStaticExtension — the per-feed StaticExtension for cluj-napoca.
+ * staticExtension — per-feed StaticExtension factory.
+ *
+ * The orchestrator (`n3ary/gtfs/packages/gtfs-static/src/cli.ts`)
+ * imports `${publisher}/static` and calls `staticExtension(feedConfig)`
+ * without knowing what feed it is. This factory is the **only** entry
+ * point the orchestrator uses to reach per-feed static knowledge.
  *
  * Owns every column + table + computed value that goes into the
- * sqlite beyond the public GTFS Schedule spec. Called by the generic
- * `gtfs-static` pipeline (see `n3ary/gtfs/packages/gtfs-static/src/
- * make-sqlite.ts`, which now ships the `StaticExtension` API).
- *
- * The shape of `StaticExtension` is duplicated here (also declared in
+ * sqlite beyond the public GTFS Schedule spec. The shape of
+ * `StaticExtension` is duplicated here (also declared in
  * `@gtfs/static/src/lib/extension.ts`) — TS is structural, so the
- * runtime contract is the same regardless of which package's declaration
- * is on each side. We keep them in sync via this file's vitest suite:
- * if the shape changes here, the extension.ts in @gtfs/static MUST be
- * updated too. Long-term, lift the type into `@n3ary/gtfs-spec`.
+ * runtime contract is the same regardless of which package's
+ * declaration is on each side. We keep them in sync via the vitest
+ * suite here; if the shape changes, the extension.ts in @gtfs/static
+ * MUST be updated too. Long-term, lift the type into
+ * `@n3ary/gtfs-spec`.
  */
 
 import type Database from 'better-sqlite3';
@@ -47,18 +50,18 @@ export interface StaticExtension {
 }
 
 /**
- * Per-feed config for cluj-napoca. The `timing` block (and any future
- * per-feed knobs) is what makes cluj different from a generic
- * Transitous mirror — currently it carries peak/off-peak/night speed
- * buckets + peak windows + dwell seconds. See
- * `n3ary/gtfs/packages/gtfs-static/feeds/cluj-napoca/config.json`.
+ * Per-feed config shape consumed by `staticExtension(feedConfig)`.
+ * Each adapter declares its own typed shape; the orchestrator passes
+ * the raw `feeds/<id>/config.json` object through without
+ * interpretation.
  */
-export type ClujFeedConfig = {
+export type StaticExtensionFeedConfig = {
   timing?: unknown;
+  [key: string]: unknown;
 };
 
 /**
- * Construct the StaticExtension object for cluj-napoca.
+ * Construct the StaticExtension object for this feed.
  *
  * Adds:
  *   1. `networks.network_color` — producer-computed chip color for
@@ -71,7 +74,7 @@ export type ClujFeedConfig = {
  *      top of the spec-CSV-derived routes, then computes network
  *      colors. UPDATEs the live DB rows.
  */
-export function clujStaticExtension(feedConfig: ClujFeedConfig): StaticExtension {
+export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticExtension {
   return {
     columnExtensions: [
       { table: 'networks', column: ['network_color', 'TEXT'] },
@@ -87,15 +90,15 @@ export function clujStaticExtension(feedConfig: ClujFeedConfig): StaticExtension
           : [],
       },
     },
-    fillComputedColumns: (db, ctx) => applyClujStaticPostLoad(db, ctx),
+    fillComputedColumns: (db, ctx) => applyStaticPostLoad(db, ctx),
   };
 }
 
 /**
- * Run the cluj post-load hook on an open `Database`. Exported for
- * tests; production callers reach it via `clujStaticExtension`.
+ * Run the per-feed post-load hook on an open `Database`. Exported
+ * for tests; production callers reach it via `staticExtension`.
  */
-export function applyClujStaticPostLoad(
+export function applyStaticPostLoad(
   db: Database.Database,
   ctx: ExtensionContext,
 ): void {
@@ -116,7 +119,7 @@ export function applyClujStaticPostLoad(
     }
   })();
   for (const line of allRouteFixup.logs) {
-    console.log(`[cluj-static-postload] ${ctx.feedId}: routes — ${line}`);
+    console.log(`[static-postload] ${ctx.feedId}: routes — ${line}`);
   }
 
   // 2. Network colors — only meaningful when networks.txt + route_networks.txt
@@ -135,7 +138,7 @@ export function applyClujStaticPostLoad(
     for (const [netId, color] of colors) updateNet.run(color, netId);
   })();
   console.log(
-    `[cluj-static-postload] ${ctx.feedId}: network colors — ` +
+    `[static-postload] ${ctx.feedId}: network colors — ` +
       [...colors.entries()].map(([id, c]) => `${id}=#${c}`).join(', '),
   );
 }

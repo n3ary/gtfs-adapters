@@ -1,16 +1,18 @@
 /**
- * Barrel for the cluj adapter's static pipeline.
+ * Barrel for the adapter's static pipeline.
  *
- * `@n3ary/gtfs-adapter-cluj-napoca/static` — published via the
- * adapter package's `exports.static` subpath. Consumed by the
- * generic `gtfs-static` pipeline (`n3ary/gtfs/packages/gtfs-static/
- * src/cli.ts`).
+ * Published via the adapter package's `exports.static` subpath.
+ * Consumed by the generic `gtfs-static` pipeline
+ * (`n3ary/gtfs/packages/gtfs-static/src/cli.ts`). The orchestrator
+ * imports `${publisher}/static` and calls `staticExtension(feedConfig)`
+ * without knowing what adapter it is — this barrel exposes the
+ * generic surface that contract requires.
  */
 
 export {
-  clujStaticExtension,
-  applyClujStaticPostLoad,
-  type ClujFeedConfig,
+  staticExtension,
+  applyStaticPostLoad,
+  type StaticExtensionFeedConfig,
 } from './extension.ts';
 
 export type {
