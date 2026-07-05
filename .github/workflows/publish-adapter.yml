@@ -3,7 +3,7 @@ description: >-
   Triggers on PR merges to main when adapter code / package.json /
   tsconfig files change. Detects which adapters changed via
   `git diff` between base and merge_commit_sha, then calls
-  `n3ary/actions/adapters/publish@v18` once per adapter via a matrix.
+  `n3ary/actions/adapters/publish@v19` once per adapter via a matrix.
   `workflow_dispatch` is kept for emergency hot-fixes via the
   `version-override` input.
 
@@ -149,7 +149,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish adapter
-        uses: n3ary/actions/.github/actions/adapters/publish@v18
+        uses: n3ary/actions/.github/actions/adapters/publish@v19
         with:
           adapter: ${{ matrix.adapter }}
           version-override: ${{ needs.detect.outputs.force_version }}
