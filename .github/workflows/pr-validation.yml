@@ -7,7 +7,6 @@ on:
 # Shared base PR-validation lives in n3ary/actions and bundles:
 #   - ascii-check (commit msgs + PR title)
 #   - drift-check (vendored n3ary/standards SHA)
-#   - line-length-check (changed files vs 80 chars)
 # Repo-specific jobs (validate matrix per adapter) stay local.
 
 permissions:
@@ -16,7 +15,7 @@ permissions:
 
 jobs:
   shared:
-    uses: n3ary/actions/.github/workflows/pr-validation.yml@v5
+    uses: n3ary/actions/.github/workflows/pr-validation.yml@v6
 
   validate:
     runs-on: ubuntu-latest
