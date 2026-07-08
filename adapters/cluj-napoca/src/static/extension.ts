@@ -1,15 +1,27 @@
 /**
- * staticExtension — per-feed StaticExtension factory.
+ * staticExtension -- per-feed StaticExtension factory.
  *
- * The orchestrator (`n3ary/gtfs/packages/gtfs-static/src/cli.ts`)
- * imports `${publisher}/static` and calls `staticExtension(feedConfig)`
- * without knowing what feed it is. This factory is the **only** entry
- * point the orchestrator uses to reach per-feed static knowledge.
+ * The orchestrator (`n3ary/gtfs/static`'s cli.ts) imports
+ * `${publisher}/static` and calls `staticExtension(feedConfig)` without
+ * knowing what feed it is. This factory is the **only** entry point
+ * the orchestrator uses to reach per-feed static knowledge.
  *
  * Owns every column + table + computed value that goes into the
- * sqlite beyond the public GTFS Schedule spec. The shape of
- * `StaticExtension` is duplicated here (also declared in
- * `@gtfs/static/src/lib/extension.ts`) — TS is structural, so the
+ * sqlite beyond the public GTFS Schedule spec.
+ *
+ * CONTRACT NOTE: in the SQL-free refactor, the adapter is a PURE
+ * data-in / data-out module. It never imports a SQLite driver, never
+ * touches the DB, never knows which engine the pipeline runs on. The
+ * `fillComputedColumns` hook receives the buffered spec rows + a
+ * feedId and returns a `ComputedUpdates` object (table -> partial
+ * rows to UPDATE). The pipeline then constructs UPDATE statements
+ * using the spec's PRIMARY KEY metadata and applies them in a
+ * transaction. See `@gtfs/static/src/lib/extension.ts` for the
+ * full contract + the rationale (audit surface, schema-agnostic
+ * adapters, fewer dependency edges).
+ *
+ * The shape of `StaticExtension` is duplicated here (also declared in
+ * `@gtfs/static/src/lib/extension.ts`) -- TS is structural, so the
  * runtime contract is the same regardless of which package's
  * declaration is on each side. We keep them in sync via the vitest
  * suite here; if the shape changes, the extension.ts in @gtfs/static
@@ -17,7 +29,6 @@
  * `@n3ary/gtfs-spec`.
  */
 
-import type Database from 'better-sqlite3';
 import type { ColumnSpec } from '@n3ary/gtfs-spec/sql';
 import { resolveRouteColors, computeNetworkColors } from './route-colors.ts';
 
@@ -38,10 +49,28 @@ export type ExtensionContext = {
   readonly routeNetworks: ReadonlyArray<Record<string, unknown>>;
 };
 
+/**
+ * Per-table partial-row updates the adapter returns from
+ * `fillComputedColumns`. Each entry under a table key MUST include
+ * the spec's PRIMARY KEY column(s) (the pipeline uses them to build
+ * `WHERE pk = ?`); remaining keys are the columns to SET.
+ *
+ * Example:
+ *   { routes:    [{ route_id: 'R1', route_color: 'FF0000' }],
+ *     networks:  [{ network_id: 'night', network_color: 'aabbcc' }] }
+ */
+export type ComputedUpdates = {
+  readonly [tableName: string]: ReadonlyArray<Record<string, unknown>>;
+};
+
+/**
+ * PURE hook: spec rows in, ComputedUpdates out. NO DB access.
+ * Async is allowed (some adapters may fetch external material).
+ * Returning an empty object is a valid no-op.
+ */
 export type FillComputedColumnsHook = (
-  db: Database.Database,
   context: ExtensionContext,
-) => void | Promise<void>;
+) => ComputedUpdates | Promise<ComputedUpdates>;
 
 export interface StaticExtension {
   columnExtensions?: ReadonlyArray<ColumnExtension>;
@@ -64,15 +93,16 @@ export type StaticExtensionFeedConfig = {
  * Construct the StaticExtension object for this feed.
  *
  * Adds:
- *   1. `networks.network_color` — producer-computed chip color for
+ *   1. `networks.network_color` -- producer-computed chip color for
  *      each network (derived from per-route modal colors).
- *   2. `_neary_config` table — key/value pipeline-internal table,
+ *   2. `_neary_config` table -- key/value pipeline-internal table,
  *      populated from `feedConfig.timing`. The app reads these rows
  *      at runtime (`speed_kmh` peak/off-peak/night, dwell seconds,
  *      peak/night windows) for its timing-aware travel-time math.
- *   3. `fillComputedColumns` hook — applies the route-color fixup on
- *      top of the spec-CSV-derived routes, then computes network
- *      colors. UPDATEs the live DB rows.
+ *   3. `fillComputedColumns` hook -- computes the route-color fixup
+ *      from `ctx.routes`, then derives per-network chip colors. The
+ *      hook returns a `ComputedUpdates` object; the pipeline owns
+ *      the SQL.
  */
 export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticExtension {
   return {
@@ -90,55 +120,69 @@ export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticEx
           : [],
       },
     },
-    fillComputedColumns: (db, ctx) => applyStaticPostLoad(db, ctx),
+    fillComputedColumns: (ctx) => applyStaticPostLoad(ctx),
   };
 }
 
 /**
- * Run the per-feed post-load hook on an open `Database`. Exported
+ * Run the per-feed post-load derivation in pure-data form. Exported
  * for tests; production callers reach it via `staticExtension`.
+ *
+ * Inputs:
+ *   - `ctx.routes`  -- parsed routes.txt rows
+ *   - `ctx.networks`, `ctx.routeNetworks` -- parsed networks+route_networks
+ *     (only meaningful when networks.txt exists; otherwise empty)
+ *
+ * Output: { routes: [{route_id, route_color}], networks: [{network_id, network_color}] }
+ *
+ * The pipeline (in @gtfs/static's `make-sqlite.ts`) walks the return
+ * value, locates PRIMARY KEY columns for `routes` and `networks` in
+ * the spec SCHEMA, and issues one UPDATE per row in a single
+ * transaction. ROLLBACK on throw.
  */
 export function applyStaticPostLoad(
-  db: Database.Database,
   ctx: ExtensionContext,
-): void {
-  // 1. Route color fixup — applied to the live routes table.
-  //    resolveRouteColors mutates a transformed copy of ctx.routes
-  //    with substituted + OKLCh-rotated values; we UPDATEs each row
-  //    inside a single transaction.
+): ComputedUpdates {
+  // 1. Route color fixup -- mutate a transformed copy of ctx.routes
+  //    with substituted + OKLCh-rotated values; we hand the fixed
+  //    rows back to the pipeline as partial-route-color updates.
   const allRouteFixup = resolveRouteColors(
     ctx.routes as Parameters<typeof resolveRouteColors>[0],
   );
-  const updateRouteColor = db.prepare('UPDATE routes SET route_color = ? WHERE route_id = ?');
-  db.transaction(() => {
-    for (const r of allRouteFixup.rows) {
-      const id = (r as { route_id?: string }).route_id;
-      if (!id) continue;
-      const color = (r as { route_color?: string }).route_color ?? '';
-      updateRouteColor.run(color, id);
-    }
-  })();
+  const routeUpdates: Array<Record<string, unknown>> = [];
+  for (const r of allRouteFixup.rows) {
+    const id = (r as { route_id?: string }).route_id;
+    if (!id) continue;
+    const color = (r as { route_color?: string }).route_color ?? '';
+    routeUpdates.push({ route_id: id, route_color: color });
+  }
   for (const line of allRouteFixup.logs) {
-    console.log(`[static-postload] ${ctx.feedId}: routes — ${line}`);
+    console.log(`[static-postload] ${ctx.feedId}: routes -- ${line}`);
   }
 
-  // 2. Network colors — only meaningful when networks.txt + route_networks.txt
-  //    are present (they're optional GTFS tables). The pipeline already skips
-  //    insertion when missing, so ctx.networks is empty in that case and
-  //    computeNetworkColors returns an empty map.
-  if (ctx.networks.length === 0) return;
+  // 2. Network colors -- only meaningful when networks.txt +
+  //    route_networks.txt are present. The pipeline already skips
+  //    insertion when missing, so ctx.networks is empty in that case
+  //    and computeNetworkColors returns an empty map. We always
+  //    include the routeUpdates branch (even when empty) so the
+  //    pipeline can rely on the shape being consistent.
+  const updates: ComputedUpdates = {
+    ...(routeUpdates.length > 0 ? { routes: routeUpdates } : {}),
+  };
+  if (ctx.networks.length === 0) return updates;
   const colors = computeNetworkColors(
     ctx.routes as Parameters<typeof computeNetworkColors>[0],
     ctx.routeNetworks as Parameters<typeof computeNetworkColors>[1],
     ctx.networks as Parameters<typeof computeNetworkColors>[2],
   );
-  if (colors.size === 0) return;
-  const updateNet = db.prepare('UPDATE networks SET network_color = ? WHERE network_id = ?');
-  db.transaction(() => {
-    for (const [netId, color] of colors) updateNet.run(color, netId);
-  })();
+  if (colors.size === 0) return updates;
+  const networkUpdates: Array<Record<string, unknown>> = [];
+  for (const [network_id, color] of colors) {
+    networkUpdates.push({ network_id, network_color: color });
+  }
   console.log(
-    `[static-postload] ${ctx.feedId}: network colors — ` +
+    `[static-postload] ${ctx.feedId}: network colors -- ` +
       [...colors.entries()].map(([id, c]) => `${id}=#${c}`).join(', '),
   );
+  return { ...updates, networks: networkUpdates };
 }
