@@ -203,9 +203,18 @@ The runtime entry point. Exports `ingestBuild(opts)` returning
 
 The sqlite extension factory. Exports `staticExtension(feedConfig)`
 returning a `StaticExtension` (column/table extensions + a
-`fillComputedColumns` hook). The orchestrator passes this to
-`makeSqlite(gtfsPath, feedId, staticExtension)` so the post-load hook
-can apply route-color substitution + network-color writeback.
+`fillComputedColumns` hook).
+
+Since the SQL-free refactor, this module is a PURE data-in / data-out
+producer: it never imports a SQLite driver and never touches the
+database. The `fillComputedColumns` hook receives the buffered spec
+rows + a feedId and returns a `ComputedUpdates` object describing
+per-table partial rows to UPDATE. The pipeline owns the SQL.
+
+The orchestrator passes the StaticExtension to
+`makeSqlite(gtfsPath, feedId, staticExtension)`, which calls the
+hook after spec CSVs land and applies the returned updates via
+`UPDATE ... WHERE <pk>` built from the spec's SCHEMA.
 
 ### `src/rt/index.ts`
 

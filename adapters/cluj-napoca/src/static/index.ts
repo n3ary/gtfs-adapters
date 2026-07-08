@@ -25,6 +25,7 @@ export type {
   TableExtension,
   ExtensionContext,
   FillComputedColumnsHook,
+  ComputedUpdates,
 } from './extension.ts';
 
 export {

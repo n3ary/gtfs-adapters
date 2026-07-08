@@ -7,7 +7,6 @@ packages:
 # approve all of them here. Each adapter can override this in its
 # own pnpm-workspace.yaml if it has a different dep profile.
 allowBuilds:
-  better-sqlite3: true
   esbuild: true
   protobufjs: true
   sharp: true

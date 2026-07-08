@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { join } from 'node:path';
@@ -9,6 +9,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import {
   staticExtension,
   applyStaticPostLoad,
+  type ComputedUpdates,
 } from '../../src/static/index.ts';
 import { SCHEMA } from '@n3ary/gtfs-spec/sql';
 
@@ -27,7 +28,7 @@ const SQLITE_GZ = join(WORK, 'feeds.sqlite3.gz');
 
 function buildSyntheticSqlite(): void {
   mkdirSync(WORK, { recursive: true });
-  const db = new Database(SQLITE_PATH);
+  const db = new DatabaseSync(SQLITE_PATH);
   try {
     for (const [tableName, spec] of Object.entries(SCHEMA)) {
       const cols = spec.columns.map(([n, t]) => `${n} ${t}`).join(', ');
@@ -55,17 +56,53 @@ function buildSyntheticSqlite(): void {
   }
 }
 
-function readSqlite(): Database.Database {
+function readSqlite(): DatabaseSync {
   // gz-compress / decompress round-trip to mirror the pipeline's filename
   // (gtfs-static writes .sqlite3.gz). The hash/size semantics are
   // exercised elsewhere; we only care that we can read what we wrote.
-  const db = new Database(SQLITE_PATH, { readonly: true });
+  const db = new DatabaseSync(SQLITE_PATH, { readOnly: true });
   return db;
 }
 
-function runExtension(ext: ReturnType<typeof staticExtension>): Database.Database {
+// Test-side mirror of the pipeline's UPDATE applier (see
+// @gtfs/static/src/lib/extension.ts + make-sqlite.ts). The test stands
+// in for the pipeline so we can verify the hook's return value → SQL
+// effect round-trip without setting up the full pipeline.
+function applyUpdatesToTestDb(db: DatabaseSync, updates: ComputedUpdates): void {
+  db.exec('BEGIN');
+  try {
+    for (const [tableName, rows] of Object.entries(updates)) {
+      if (rows.length === 0) continue;
+      const spec = SCHEMA[tableName];
+      if (!spec) throw new Error(`test: unknown table "${tableName}"`);
+      // Find PK columns — single PK on `route_id` / `network_id` is
+      // declared as `network_id TEXT PRIMARY KEY` (PRIMARY KEY in the
+      // type string). Adequate for the 2 tables this adapter touches.
+      const pkCol = spec.columns.find(([, type]) => /\bPRIMARY KEY\b/i.test(type))?.[0];
+      if (!pkCol) throw new Error(`test: no PK on "${tableName}"`);
+      const setCols = Object.keys(rows[0]!).filter((c) => c !== pkCol);
+      if (setCols.length === 0) continue;
+      const setClause = setCols.map((c) => `${c} = ?`).join(', ');
+      const stmt = db.prepare(`UPDATE ${tableName} SET ${setClause} WHERE ${pkCol} = ?`);
+      for (const row of rows) {
+        const values = [
+          ...setCols.map((c) => row[c] as string | number | bigint | null | Uint8Array),
+          row[pkCol] as string | number | bigint | null | Uint8Array,
+        ];
+        // node:sqlite rest spread variance (same as pipeline).
+        stmt.run(...(values as Array<string | number | bigint | null | Uint8Array>));
+      }
+    }
+    db.exec('COMMIT');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch { /* original error is the actionable one */ }
+    throw e;
+  }
+}
+
+function runExtension(ext: ReturnType<typeof staticExtension>): DatabaseSync {
   // Re-open rw so the extension can UPDATE rows.
-  const db = new Database(SQLITE_PATH);
+  const db = new DatabaseSync(SQLITE_PATH);
   try {
     // Apply columnExtensions first (mirrors createSchema() order).
     for (const { table, column } of ext.columnExtensions ?? []) {
@@ -79,20 +116,25 @@ function runExtension(ext: ReturnType<typeof staticExtension>): Database.Databas
         const stmt = db.prepare(
           `INSERT OR IGNORE INTO ${tableName} (${colNames.join(', ')}) VALUES (${colNames.map(() => '?').join(', ')})`,
         );
-        for (const row of te.rows) stmt.run(colNames.map((c) => (row[c] ?? null)));
+        for (const row of te.rows) {
+          // node:sqlite rest spread variance — same as pipeline.
+          stmt.run(...(colNames.map((c) => (row[c] ?? null)) as Array<string | number | bigint | null | Uint8Array>));
+        }
       }
     }
     // Read the buffered routes/networks/route_networks back as the
-    // pipeline does, then run the hook.
+    // pipeline does, then run the hook (now pure data-in/data-out)
+    // and apply the returned updates via the test's UPDATE helper.
     const routes = db.prepare('SELECT * FROM routes').all() as Array<Record<string, unknown>>;
     const networks = db.prepare('SELECT * FROM networks').all() as Array<Record<string, unknown>>;
     const routeNetworks = db.prepare('SELECT * FROM route_networks').all() as Array<Record<string, unknown>>;
-    applyStaticPostLoad(db, {
+    const updates = applyStaticPostLoad({
       feedId: 'test',
       routes,
       networks,
       routeNetworks,
     });
+    applyUpdatesToTestDb(db, updates);
   } finally {
     db.close();
   }

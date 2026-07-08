@@ -46,16 +46,7 @@
     "archiver": "^8.0.0",
     "gtfs-realtime-bindings": "^1.1.1"
   },
-  "peerDependencies": {
-    "better-sqlite3": "^12.11.1"
-  },
-  "peerDependenciesMeta": {
-    "better-sqlite3": {
-      "optional": true
-    }
-  },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.0",
     "eslint": "^10.6.0",
     "protobufjs": "^7.4.0",
