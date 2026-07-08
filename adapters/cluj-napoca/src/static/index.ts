@@ -7,6 +7,10 @@
  * imports `${publisher}/static` and calls `staticExtension(feedConfig)`
  * without knowing what adapter it is — this barrel exposes the
  * generic surface that contract requires.
+ *
+ * Realtime-specific knowledge (Quirks, extra RT URLs) lives in the
+ * `/rt` subpath. The `/static` subpath is for table extensions,
+ * computed columns, and other schedule-pipeline concerns only.
  */
 
 export {
