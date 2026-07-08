@@ -1,15 +1,27 @@
 /**
  * RT surface of the Cluj adapter.
  *
- * Exports the per-feed quirks to register with the generic gtfs-rt
- * proxy. The generic proxy exposes a `registerRtQuirks(quirkFor)`
- * call; we hand it a function that returns our quirk for the
- * `cluj-napoca` feed and undefined for everything else.
+ * Two responsibilities:
+ *   1. Per-feed Quirk for the rt app (recovering direction_id +
+ *      start_time from the upstream's `<route>_<dir>_<svc>_<run>_<HHMM>`
+ *      tripId encoding). The rt app dynamic-imports this subpath and
+ *      calls the Quirk per fetched FeedMessage.
+ *   2. Additional vehicle_positions URLs the operator has set up
+ *      beyond the canonical CTP endpoint. Empty today; if CTP ever
+ *      publishes a mirror, this is the one place that knows.
+ *      Consumed by the static pipeline at build time.
+ *
+ * Note: the canonical `vehicle_positions` / `trip_updates` /
+ * `service_alerts` URLs are NOT exported here. They are
+ * "official-data" owned either by the per-feed authored config
+ * (`feeds/<id>/config.json`) or by the MDB catalog lookup -- not
+ * by the adapter.
  */
 import { clujQuirk, parseClujTripId } from './cluj.ts';
 import type { ClujQuirk } from './cluj.ts';
+import { extraVehiclePositions } from './extras.ts';
 
-export { clujQuirk, parseClujTripId };
+export { clujQuirk, parseClujTripId, extraVehiclePositions };
 export type { ClujQuirk };
 
 /**
