@@ -1,25 +1,33 @@
 # ----------------------------------------------------------------------------
-# [release] @n3ary/gtfs-adapter-cluj-napoca to GH Packages (on PR merge)
+# [release] @n3ary/gtfs-adapter-cluj-napoca to GH Packages (on push to main)
 #
-# Triggers on PR merges to main when adapter code / package.json /
+# Triggers on pushes to main when adapter code / package.json /
 # tsconfig files change. Detects which adapters changed via
-# `git diff` between base and merge_commit_sha, then calls
-# `n3ary/actions/package/publish@v22` once per adapter via a matrix.
+# `git diff` between HEAD~1 and HEAD, then calls
+# `n3ary/actions/package/publish@v23` once per adapter via a matrix.
 # `workflow_dispatch` is kept for emergency hot-fixes via the
 # `version-override` input.
 #
-# Trigger:     pull_request closed (merged only), manual
+# Why `push: branches: [main]` and not `pull_request: closed`:
+# The previous `pull_request: closed` trigger was consistently
+# "skipped" on every PR merge (job-level `if:` evaluated false
+# with no log line, `steps: []`, no runner). Switching to a
+# push trigger with a paths filter is simpler, more reliable,
+# and naturally binds the publish to the bot's version-bump
+# commit landing on main (the bot's release PR is a squash
+# merge, so the merge commit lands as a single push).
+#
+# Trigger:     push to main (paths-filtered), manual
 # Permissions: contents: write (tag + push), packages: write (npm),
 #              id-token: write (OIDC for SLSA provenance)
 # Secrets:     GITHUB_TOKEN, NPM_TOKEN
 # Owner:       @ciotlosm
 # Run time:    ~1-2 min per adapter
 # ----------------------------------------------------------------------------
-name: '[release] @n3ary/gtfs-adapter-cluj-napoca to GH Packages (on PR merge)'
+name: '[release] @n3ary/gtfs-adapter-cluj-napoca to GH Packages (on push to main)'
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches: [main]
     paths:
       - 'adapters/*/package.json'
@@ -50,9 +58,8 @@ permissions:
 jobs:
   detect:
     name: Identify adapters to publish
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.pull_request.merged == 'true'
+    # The trigger is either push (any push on main, paths-filtered)
+    # or workflow_dispatch. Both are valid; always run.
     runs-on: ubuntu-latest
     outputs:
       adapters: ${{ steps.find.outputs.list }}
@@ -87,9 +94,15 @@ jobs:
             fi
             FORCE_VERSION="$INPUT_VERSION"
           else
-            # PR-merge. Resolve the SHAs and diff for the merge.
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            HEAD_SHA="${{ github.event.pull_request.merge_commit_sha }}"
+            # Push to main. Diff HEAD~1 -> HEAD to find what landed.
+            # The paths filter at the trigger level already guarantees
+            # the push touched one of the adapter paths, so HEAD~1 is
+            # always a valid base. (If the bot's release PR is a
+            # squash merge, HEAD~1 is the prior main tip and the
+            # squash commit is HEAD; the diff is just the version
+            # bump on package.json, which is exactly what we want.)
+            BASE_SHA="HEAD~1"
+            HEAD_SHA="HEAD"
 
             # Touching a top-level config file (pnpm-workspace.yaml,
             # adapters/*/tsconfig*.json) doesn't change a specific
