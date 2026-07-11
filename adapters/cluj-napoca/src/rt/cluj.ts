@@ -3,6 +3,10 @@
  * upstream's `<route>_<dir>_<service>_<run>_<HHMM>`-encoded
  * `trip_id`. See n3ary/app#161 for the full context.
  *
+ * Tested in cluj.test.ts. The live RT quirk receiver is the
+ * generic gtfs-rt proxy at n3ary/gtfs-publisher, which imports
+ * `clujQuirk` from this module's subpath.
+ *
  * Canonical source for the per-feed quirk. The generic gtfs-rt
  * proxy (`n3ary/gtfs-publisher/packages/gtfs-rt/src/quirks/`)
  * imports it from `@n3ary/gtfs-adapter-cluj-napoca/rt` —
