@@ -25,8 +25,8 @@ permissions:
   contents: read
 
 jobs:
-  pr-check:
-    uses: n3ary/actions/.github/workflows/pr-validation.yml@v22
+  shared:
+    uses: n3ary/actions/.github/workflows/pr-validation.yml@v23
 
   validate:
     runs-on: ubuntu-latest
@@ -56,7 +56,7 @@ jobs:
         # and goes through PR review. pnpm 11's supply-chain
         # re-verification (which rejects freshly-published internal
         # packages within 24h) is bypassed.
-        uses: n3ary/actions/.github/actions/setup-pnpm-gh-packages-auth@v22
+        uses: n3ary/actions/.github/actions/setup-pnpm-gh-packages-auth@v23
         with:
           auth-token: ${{ secrets.NPM_TOKEN }}
 
