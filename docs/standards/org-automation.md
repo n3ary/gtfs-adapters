@@ -1,4 +1,4 @@
-<!-- synced from n3ary/standards@da0a851 on 2026-07-11 -->
+<!-- synced from n3ary/standards@43c6fca on 2026-07-11 -->
 <!-- do not edit locally; run scripts/vendor-standards.mjs to update -->
 
 # Org automation: the release bot
@@ -13,8 +13,23 @@ On every `pull_request: closed` event with `merged == true`, the bot:
 2. Reads the repo's `package.json#version` on the current `main` tip.
 3. Computes the next **CalVer** version: `YY.M.D-N` in `Europe/Bucharest` timezone, counter resets at day boundary, counter starts at `1`. See [version-management.md](version-management.md) for the format and the algorithm.
 4. Checks whether the merge commit already changed the version (the `skip-if-already-touched` rule). If yes, the bot no-ops.
-5. Writes the new version to `package.json` (and any sub-package `package.json`s — e.g. `libs/spec/`, `adapters/*/`).
-6. Commits with `chore(release): <version>` and pushes the commit to `main`.
+5. Creates a new branch `release/calver-<version>` from the merge commit.
+6. Commits the version bump to the new branch (a single commit covering all bumped `package.json` files in the repo).
+7. Opens a pull request from the new branch to `main`, titled `chore(release): <version>`.
+8. Enables **auto-merge** on the pull request.
+
+The PR is a normal contributor PR. With 0 required reviews (n3ary's branch protection standard), auto-merge fires as soon as the required status checks pass. The version lands on `main` within ~10-30 seconds of the original PR merge, without any human click.
+
+## Why PR-based (not direct push)
+
+GitHub's `bypass_actors` feature for GitHub Apps requires **GitHub Team or Enterprise** ($4/user/month). The n3ary org is on the free plan. The PR-based flow works on the free plan:
+
+- The bot is a contributor, not a privileged actor.
+- The version-bump PR goes through the normal review + status-checks path.
+- Auto-merge handles the merge itself.
+- No bypass-actor rule, no Team upgrade, no direct push to `main`.
+
+The trade-off: the version-bump PR is visible in the org's PR queue (you can ignore it; it's a one-line change). If a required status check is broken, the PR sits open until the check is fixed or the PR is merged manually.
 
 The bot is a Cloudflare Worker. Source: `n3ary/release-bot/src/`. Deploy: `wrangler deploy` from the repo root.
 
@@ -35,7 +50,8 @@ n3ary/release-bot/
 │   ├── index.ts                # Worker entry, route dispatch
 │   ├── webhook.ts              # webhook signature verification, event handling
 │   ├── bump.ts                 # CalVer arithmetic: nextCalVer(current, now, tz)
-│   ├── commit.ts               # pushes the chore(release) commit via the GitHub API
+│   ├── commit.ts               # discoverAndOpenPR: discover, compute, branch, commit, PR, auto-merge
+│   ├── pr.ts                   # createBranch, openPullRequest, enableAutoMerge, findOpenReleasePR
 │   ├── config.ts               # loads env (timezone, app ID, private key, webhook secret)
 │   └── types.ts                # shared types
 ├── test/
@@ -87,11 +103,9 @@ The Worker is now live at a `*.workers.dev` URL. Configure the GitHub App's webh
 
 In the GitHub App settings, click "Install App" and select the n3ary org. Grant access to "All repositories" (or a specific subset if you want to limit the bot to certain repos).
 
-### 5. Add the org-level branch protection bypass
+### 5. Re-accept the new permissions in the GH UI (only if upgrading from a previous version)
 
-In the org settings: Settings → Branches → Branch protection rules → edit the rule for `main` (or create one if it doesn't exist). Under "Allow specified actors to bypass required pull requests", add `n3ary-release-bot[bot]`. Save.
-
-This single rule covers every repo in the org. The bot's `chore(release)` commits land on `main` directly, no PR required.
+If the app was already installed on the org (e.g. from a previous version of this bot that used direct push), GitHub will show a "new permissions requested" banner in the app's settings. The new permission is `pull_requests: write` (needed for the bot to open PRs and enable auto-merge). Click through and accept. Without this, the bot can create the branch and commit, but cannot open the PR or enable auto-merge.
 
 ### 6. Remove the per-repo `github-actions[bot]` bypass (cleanup)
 
