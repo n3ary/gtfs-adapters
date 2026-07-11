@@ -1,30 +1,47 @@
 # ----------------------------------------------------------------------------
-# [release] @n3ary/gtfs-adapter-cluj-napoca to GH Packages (on push to main)
+# [publish] @n3ary/gtfs-adapter-cluj-napoca to GH Packages (on bot bump)
 #
-# Triggers on pushes to main when adapter code / package.json /
-# tsconfig files change. Detects which adapters changed via
-# `git diff` between HEAD~1 and HEAD, then calls
-# `n3ary/actions/package/publish@v23` once per adapter via a matrix.
-# `workflow_dispatch` is kept for emergency hot-fixes via the
-# `version-override` input.
+# Triggers ONLY when the n3ary-release-bot lands a version-bump
+# commit on main that touches this library's path. Detects
+# which adapters changed via `git diff` between HEAD~1 and HEAD,
+# then calls `n3ary/actions/package/publish@v23` once per
+# adapter via a matrix. `workflow_dispatch` is kept for
+# emergency hot-fixes via the `version-override` input.
+#
+# Why bot-only (`github.event.head_commit.author.username`):
+# The n3ary-release-bot is the canonical version bumper for
+# n3ary repos. Library packages (private: false) get a semver
+# bump from the bot; the bot opens a release/X PR that
+# auto-merges to main, producing a single squash commit whose
+# author is `n3ary-release-bot[bot]`. Tying the publish to
+# THAT author (not "any push that touches a package.json")
+# means a code-only PR that incidentally changes a
+# package.json (e.g. a dev adds a dep) does NOT publish. A
+# human who wants to publish outside the bot flow uses the
+# `workflow_dispatch` trigger.
 #
 # Why `push: branches: [main]` and not `pull_request: closed`:
 # The previous `pull_request: closed` trigger was consistently
 # "skipped" on every PR merge (job-level `if:` evaluated false
-# with no log line, `steps: []`, no runner). Switching to a
-# push trigger with a paths filter is simpler, more reliable,
-# and naturally binds the publish to the bot's version-bump
-# commit landing on main (the bot's release PR is a squash
-# merge, so the merge commit lands as a single push).
+# with no log line, `steps: []`, no runner). The same trap
+# applied to the publish job-level `if:`. Switching to a push
+# trigger with paths filter + a bot-author job-level guard
+# gives a single, explicit, easy-to-reason-about condition
+# for "this push is a bot-driven version bump and we should
+# publish".
 #
-# Trigger:     push to main (paths-filtered), manual
+# Naming: matches the `[build] gtfs-rt container image`
+# pattern on gtfs-publisher -- `[verb] [artifact]` where
+# verb describes what the workflow does.
+#
+# Trigger:     push to main (paths-filtered, bot-only), manual
 # Permissions: contents: write (tag + push), packages: write (npm),
 #              id-token: write (OIDC for SLSA provenance)
 # Secrets:     GITHUB_TOKEN, NPM_TOKEN
 # Owner:       @ciotlosm
 # Run time:    ~1-2 min per adapter
 # ----------------------------------------------------------------------------
-name: '[release] @n3ary/gtfs-adapter-cluj-napoca to GH Packages (on push to main)'
+name: '[publish] @n3ary/gtfs-adapter-cluj-napoca to GH Packages (on bot bump)'
 
 on:
   push:
@@ -58,8 +75,17 @@ permissions:
 jobs:
   detect:
     name: Identify adapters to publish
-    # The trigger is either push (any push on main, paths-filtered)
-    # or workflow_dispatch. Both are valid; always run.
+    # Run on:
+    #   - workflow_dispatch (any manual trigger)
+    #   - push to main where the head commit's author is the
+    #     n3ary-release-bot. The bot's release PR squash-merges
+    #     to main, leaving a single commit with the bot as the
+    #     author. Code-only PRs (with human authors) do not pass
+    #     this check and the publish is skipped.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+       github.event.head_commit.author.username == 'n3ary-release-bot[bot]')
     runs-on: ubuntu-latest
     outputs:
       adapters: ${{ steps.find.outputs.list }}
