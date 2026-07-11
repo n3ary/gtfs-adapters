@@ -1,11 +1,21 @@
-name: Publish adapters
-description: >-
-  Triggers on PR merges to main when adapter code / package.json /
-  tsconfig files change. Detects which adapters changed via
-  `git diff` between base and merge_commit_sha, then calls
-  `n3ary/actions/package/publish@v21` once per adapter via a matrix.
-  `workflow_dispatch` is kept for emergency hot-fixes via the
-  `version-override` input.
+# ----------------------------------------------------------------------------
+# [release] @n3ary/gtfs-adapter-cluj-napoca to GH Packages (on PR merge)
+#
+# Triggers on PR merges to main when adapter code / package.json /
+# tsconfig files change. Detects which adapters changed via
+# `git diff` between base and merge_commit_sha, then calls
+# `n3ary/actions/package/publish@v22` once per adapter via a matrix.
+# `workflow_dispatch` is kept for emergency hot-fixes via the
+# `version-override` input.
+#
+# Trigger:     pull_request closed (merged only), manual
+# Permissions: contents: write (tag + push), packages: write (npm),
+#              id-token: write (OIDC for SLSA provenance)
+# Secrets:     GITHUB_TOKEN, NPM_TOKEN
+# Owner:       @ciotlosm
+# Run time:    ~1-2 min per adapter
+# ----------------------------------------------------------------------------
+name: '[release] @n3ary/gtfs-adapter-cluj-napoca to GH Packages (on PR merge)'
 
 on:
   pull_request:

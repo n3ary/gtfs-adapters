@@ -1,4 +1,16 @@
-name: PR Validation
+# ----------------------------------------------------------------------------
+# [check] PR validation (on PR)
+#
+# Validates every PR: shared ASCII + standards-drift checks, repo-specific
+# check + test per adapter (matrix). Never pushes to the branch.
+#
+# Trigger:     pull_request
+# Permissions: contents: read
+# Secrets:     NPM_TOKEN (for pnpm install from GH Packages)
+# Owner:       @ciotlosm
+# Run time:    ~2-4 min
+# ----------------------------------------------------------------------------
+name: '[check] PR validation (on PR)'
 
 on:
   pull_request:
@@ -10,8 +22,7 @@ on:
 # Repo-specific jobs (validate matrix per adapter) stay local.
 
 permissions:
-  contents: write  # adapters/publish action (now version-bump@v12 inside)
-                   # pushes bump commits back to PR branch.
+  contents: read
 
 jobs:
   shared:
@@ -54,44 +65,3 @@ jobs:
 
       - name: Test (matrix adapter)
         run: pnpm --filter @n3ary/gtfs-adapter-${{ matrix.adapter }} test
-
-  auto-bump:
-    # Not in required status checks by design. Auto-bump only edits
-    # `<adapter>/package.json#version` so it cannot introduce a code
-    # regression, and making it required would force every PR to wait
-    # for a second CI cycle (the bot pushes a new commit after
-    # `validate` passes, which would otherwise re-block the PR with
-    # `strict: true` status checks).
-    #
-    # Required so publish-adapter.yml succeeds on the merged release:
-    # without an auto-bump here, the merge-commit's package.json
-    # still reads the pre-PR version, npm refuses
-    # "you cannot publish over the previously published versions",
-    # and the new code never reaches GH Packages. (See
-    # gtfs-publisher#128 + the publish-spec failure on #125 for the
-    # sibling bug in the publisher repo.)
-    needs: validate
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        adapter: [cluj-napoca]
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout PR branch
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Auto-bump version (matrix adapter)
-        uses: n3ary/actions/.github/actions/version-bump@v12
-        with:
-          package-dir: adapters/${{ matrix.adapter }}
-          # The action's default `bump-skip-paths` already covers
-          # .github/, docs/, .gitignore, LICENSE. Adapter source +
-          # tsconfig + package.json bumps all trigger the version
-          # step; pure workflow changes don't.
