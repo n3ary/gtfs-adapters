@@ -13,3 +13,4 @@ node_modules/
 .worktrees/
 deploy/
 *.tsbuildinfo
+.DS_Store
