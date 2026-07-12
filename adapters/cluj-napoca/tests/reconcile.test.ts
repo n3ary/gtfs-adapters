@@ -298,48 +298,53 @@ describe('reconcile', () => {
       expect(['school', 'normal']).toContain(networkId);
     }
 
-    // routes.txt — route_desc carries the human label(s) comma-separated
-    // for 1:many tag cases, route_long_name is in start-end format.
-    //
-    // School-network routes (TE*) have NO tag in route_desc (school
-    // is network-only under the new model). The school designation
-    // lives in route_networks.txt only.
+    // routes.txt -- route_desc carries the network label + tag
+    // labels (comma-joined), with parenthetical/cleaned desc via
+    // " | " when applicable. The network label is always present
+    // (every route is in one of the two networks), and tag labels
+    // are appended in CATEGORIES order when the route matches >=1
+    // tag pattern.
     const routesTxt = files['routes.txt'];
     const r93row = routesTxt.split('\n').find((l) => l.startsWith('93,'));
-    // TE1: cleaned long_name = "Manastur", desc is un-tagged so it
-    // falls through to the un-tagged branch. The "Transport Elevi"
-    // label is NOT in route_desc.
-    expect(r93row).toMatch(/,Manastur,,/);
+    // TE1: school network, no tag. route_desc = "Transport Elevi"
+    // (network label only). The school designation is in BOTH
+    // route_networks.txt (structured) and route_desc (human-readable).
+    expect(r93row).toMatch(/,Manastur,Transport Elevi,/);
 
     const r145row = routesTxt.split('\n').find((l) => l.startsWith('145,'));
     // M76A: "TE2 Floresti " stripped from long_name -> "str. Somesului".
     // Under the new model, M76A is metroline-only (no school tag --
     // the M7x long_name TE prefix is no longer a school signal).
-    // route_desc = "Metropolitan" (single tag).
-    expect(r145row).toMatch(/,str\. Somesului,Metropolitan,/);
+    // route_desc = "Normal, Metropolitan" (network + tag). The CSV
+    // writer quotes the field because it contains a comma.
+    expect(r145row).toMatch(/,str\. Somesului,"Normal, Metropolitan",/);
 
     const r68row = routesTxt.split('\n').find((l) => l.startsWith('68,'));
     // Trailing "(untold)" stripped from long_name. M26U is also
-    // metroline (M* prefix) -> route_desc carries both tag labels.
-    // CSV writer quotes the field because it contains a comma.
-    expect(r68row).toMatch(/,Uzinei Electrice - Floresti \/ Cetate,"Untold, Metropolitan",/);
+    // metroline (M* prefix) -> route_desc carries the network
+    // label + both tag labels. CSV writer quotes the field because
+    // it contains commas.
+    expect(r68row).toMatch(/,Uzinei Electrice - Floresti \/ Cetate,"Normal, Untold, Metropolitan",/);
 
     const r15row = routesTxt.split('\n').find((l) => l.startsWith('15,'));
-    // 25N: night tag. route_desc = "Noapte".
-    expect(r15row).toMatch(/,Str\. Bucium - Str\. Unirii,Noapte,/);
+    // 25N: night tag. route_desc = "Normal, Noapte" (network + tag).
+    // The CSV writer quotes the field because it contains a comma.
+    expect(r15row).toMatch(/,Str\. Bucium - Str\. Unirii,"Normal, Noapte",/);
 
     const r205row = routesTxt.split('\n').find((l) => l.startsWith('205,'));
-    // CS: special tag. route_desc = "Cursa Speciala".
+    // CS: special tag. route_desc = "Normal, Cursa Speciala" (network + tag).
     // CS long_name cleared to '' (CS rule); the un-tagged branch
     // would try the stops fallback but the CS fixture has only
     // stop A (single-stop trip), so long_name stays empty.
-    expect(r205row).toMatch(/,CS,,Cursa Speciala,/);
+    // Quoted due to comma in desc.
+    expect(r205row).toMatch(/,CS,,"Normal, Cursa Speciala",/);
 
-    // Regular urban: empty route_desc. The field after the destination
-    // string is route_desc — index 4 (0=route_id, 1=agency_id,
-    // 2=route_short_name, 3=route_long_name, 4=route_desc).
+    // Regular urban: route_desc is the network label only ("Normal").
+    // The field after the destination string is route_desc -- index 4
+    // (0=route_id, 1=agency_id, 2=route_short_name, 3=route_long_name,
+    // 4=route_desc).
     const r1row = routesTxt.split('\n').find((l) => l.startsWith('1,'));
-    expect(r1row.split(',')[4]).toBe('');
+    expect(r1row.split(',')[4]).toBe('Normal');
 
     // Seed routes: M26 is metroline-only tag, 35 is un-tagged.
     // (M26's long_name was reversed to "Selimbar - Gara" by the
@@ -347,9 +352,12 @@ describe('reconcile', () => {
     // direction-1 headsign is "Piata Garii" but the route_long_name
     // swap shows the canonical "Selimbar - Gara".)
     const rM26row = routesTxt.split('\n').find((l) => l.startsWith('M26,'));
-    expect(rM26row).toMatch(/,Selimbar - Gara,Metropolitan,/);
+    // M26: metroline-only tag. route_desc = "Normal, Metropolitan"
+    // (network + tag, quoted due to comma).
+    expect(rM26row).toMatch(/,Selimbar - Gara,"Normal, Metropolitan",/);
     const r35row = routesTxt.split('\n').find((l) => l.startsWith('35,'));
-    expect(r35row).toMatch(/,Piata Garii - Cart\. Zorilor,,/);
+    // 35: un-tagged regular urban, route_desc is just "Normal".
+    expect(r35row).toMatch(/,Piata Garii - Cart\. Zorilor,Normal,/);
   });
 
   it('derives route_long_name from stop_times when cleanup leaves it empty', async () => {

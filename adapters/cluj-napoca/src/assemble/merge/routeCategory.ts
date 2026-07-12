@@ -645,28 +645,39 @@ function tagLabelSetLower() {
  *      data) -> `<first stop> - <last stop>` from stop_times.
  *
  *   5. **route_desc strategy** (Marius's "all useful information in
- *      Description" rule):
+ *      Description" rule, refined to include the network label):
  *      - Stripped parenthetical content (title-cased) is computed once
  *        as a shared pool, with anything matching a tag label
  *        filtered out (so we don't redundantly surface "Untold" when
  *        the route is already tagged as festival).
- *      - If tagged (>=1 tag): `route_desc` is the comma-joined
- *        tag labels (`"Metropolitan, Untold"` for an M26U). If the
- *        parenthetical pool has non-redundant content, it's appended
- *        via " | " -- e.g. M26U routes whose desc ends in "(Floresti)"
- *        -> `"Metropolitan, Untold | Floresti"`, so riders see which
- *        commune the route serves.
- *      - Else if cleaned desc has data: `route_desc` is the cleaned
- *        desc, possibly combined with stripped parenthetical content
- *        (title-cased) that provides additional info beyond the
- *        cleaned desc.
- *      - School-network routes (TE*) have no tag label in `route_desc`
- *        by design -- the school designation lives in
- *        `route_networks.txt`, not in the human-readable desc.
+ *      - The **label list** is `[network label, ...tag labels]` --
+ *        network first (operator identity), then tag labels in
+ *        CATEGORIES declaration order. For an un-tagged route this
+ *        is just the network label (e.g. `"Normal"` for a regular
+ *        urban route). For a 1:many case (M26U) this is
+ *        `"Normal, Untold, Metropolitan"`.
+ *      - If the parenthetical pool has non-redundant content, it's
+ *        appended via " | " -- e.g. an M76A whose desc ends in
+ *        "(Floresti)" -> `"Normal, Metropolitan | Floresti"`, so
+ *        riders see which commune the route serves.
+ *      - For un-tagged routes whose cleaned desc carries unique info
+ *        (e.g. D51's "P-ta Mihai Viteazu - Gilau" -- the desc is
+ *        the only place the endpoint lives), the cleaned desc is
+ *        appended via " | " after the network label. The parenthetical
+ *        pool joins the same way.
+ *      - **Every route gets the network label in `route_desc`**.
+ *        The previous design put school/normal only in
+ *        `route_networks.txt`; that worked for spec compliance but
+ *        left `route_desc` (the human-readable surface) without the
+ *        operator-identity signal. The new design makes `route_desc`
+ *        a complete label list, with `route_networks.txt` as the
+ *        structured 1:1 join. Consumers who only read `route_desc`
+ *        get the full classification.
  *
- * **1:many semantics** live in `route_desc` (the comma-joined tag
- * label list). `route_networks.txt` is 1:1 by `route_id` per the
- * public GTFS spec.
+ * **1:many semantics** live in `route_desc` (the comma-joined label
+ * list, which can carry both the 1 network entry AND multiple tag
+ * labels). `route_networks.txt` is 1:1 by `route_id` per the public
+ * GTFS spec.
  *
  * @param {{
  *   routes: Array<Pick<RouteRow, 'route_id' | 'route_short_name' | 'route_long_name' | 'route_desc'>>,
@@ -789,39 +800,48 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
       return true;
     });
 
+    // The label list is [network label, ...tag labels]. The network
+    // label is always present (every route has a network); tag
+    // labels are appended in CATEGORIES declaration order when the
+    // route matches >=1 tag pattern.
+    const labels = [network.label, ...tags.map((t) => t.label)];
+    const labelsStr = labels.join(', ');
+
     if (tags.length > 0) {
-      // Tagged. Base = comma-joined tag labels (the primary
-      // signal for tools that don't read networks.txt). Append
-      // captured parenthetical content when it provides non-redundant
-      // info. The network label (school/normal) is intentionally
-      // NOT included in route_desc -- it lives in route_networks.txt.
-      const base = tags.map((t) => t.label).join(', ');
+      // Tagged. `route_desc` is the network + tag labels (comma-
+      // joined). Append captured parenthetical content when it
+      // provides non-redundant info. e.g. an M76A whose desc ends
+      // in "(Floresti)" -> "Normal, Metropolitan | Floresti", so
+      // riders see which commune the route serves.
       if (dedupedStripped.length > 0) {
-        row.route_desc = `${base} | ${dedupedStripped.join(', ')}`;
+        row.route_desc = `${labelsStr} | ${dedupedStripped.join(', ')}`;
         descFromStrippedCount++;
       } else {
-        row.route_desc = base;
+        row.route_desc = labelsStr;
       }
     } else {
-      // Un-tagged. Build desc from three sources, in priority order:
+      // Un-tagged. The network label is still the base. Append
+      // cleaned desc or parenthetical content when either carries
+      // unique info.
       //
-      //   a) Stripped parenthetical content (title-cased) -- the "exact
-      //      mirror" Marius wants. When the long_name had "(traseu M21)"
+      //   a) Cleaned desc -- if Tranzy's desc had unique info beyond
+      //      what was in long_name (e.g. D51's "P-ta Mihai Viteazu -
+      //      Gilau" -- long_name is just "D51" the code), the desc
+      //      goes after the network label via " | ".
+      //
+      //   b) Stripped parenthetical content (title-cased) -- the
+      //      "exact mirror" case. When the long_name had "(traseu M21)"
       //      appended and Tranzy duplicated the same content in desc,
       //      after cleanup both fields have the same "Start - End"
       //      text. The parenthetical content is the only signal that's
-      //      NOT in long_name, so it goes to desc.
+      //      NOT in long_name, so it joins the network label via " | ".
       //
-      //   b) Cleaned desc -- if Tranzy's desc had unique info beyond
-      //      what was in long_name (e.g. D51's "P-ta Mihai Viteazu -
-      //      Gilau"), use it. Combined with stripped content via " | "
-      //      when both contribute unique info.
+      //   c) Network label only -- a regular urban route (no tags,
+      //      no parenthetical, no useful desc) ends up with
+      //      `route_desc = "Normal"`. The operator identity signal
+      //      is still surfaced, even though no other classification
+      //      applies.
       //
-      //   c) Fallback mirror -- when neither (a) nor (b) has unique
-      //      info, desc = cleanedDesc (which equals cleanedLongName).
-      //      Mostly cosmetic; preserves the "desc is a mirror of
-      //      long_name" behavior for routes where Tranzy duplicated
-      //      the same string in both fields.
       // Structural check: get the route's actual stop names so the stale
       // variant detector can verify the desc's terminal actually
       // appears on this route's pattern (not just "trustable enough"
@@ -839,30 +859,24 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
       if (descHasUniqueInfo) {
         // cleaned desc has info not in long_name.
         if (dedupedStripped.length > 0) {
-          row.route_desc = `${cleanedDesc} | ${dedupedStripped.join(', ')}`;
+          row.route_desc = `${labelsStr} | ${cleanedDesc} | ${dedupedStripped.join(', ')}`;
           descFromCleanedCount++;
           descFromStrippedCount++;
         } else {
-          row.route_desc = cleanedDesc;
+          row.route_desc = `${labelsStr} | ${cleanedDesc}`;
           descFromCleanedCount++;
         }
       } else if (dedupedStripped.length > 0) {
         // cleaned desc is just a mirror of long_name (or a stale
         // long_name variant) -- surface the parenthetical content as
         // the unique signal.
-        row.route_desc = dedupedStripped.join(', ');
+        row.route_desc = `${labelsStr} | ${dedupedStripped.join(', ')}`;
         descFromStrippedCount++;
       } else {
-        // cleaned desc mirrors long_name and there's no parenthetical
-        // content to surface -- leave route_desc empty. Marius's
-        // PR feedback: a desc that's just a copy of long_name is
-        // noise for the consumer (neary, OTP, Google Maps), not info.
-        // This also covers stale long_name variants (Tranzy's desc
-        // carries a different terminal pair than long_name -- e.g.
-        // route 23's "P-ta M. Viteazul - EMERSON" vs long_name
-        // "P-ta M. Viteazul - C.U.G"; without the stale-variant check
-        // we'd surface the contradictory terminal to consumers).
-        row.route_desc = '';
+        // No unique info from desc or parenthetical. Just the network
+        // label. This is the common case for regular urban routes --
+        // `route_desc = "Normal"`.
+        row.route_desc = labelsStr;
       }
 
       // Operator-visibility log: desc was preserved (terminal IS on
