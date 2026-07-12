@@ -20,7 +20,19 @@ import { SCHEMA } from '@n3ary/gtfs-spec/sql';
  *   2. routes.route_color was substituted by the fixup
  *   3. networks.network_color was computed for at least one network
  *   4. _neary_config exists with the right rows from feedConfig.timing
+ *   5. _route_tags table extension (issue #25) — DDL landed, rows
+ *      inserted verbatim from feedConfig.routeTags, n:m works
  */
+
+const SYNTHETIC_ROUTE_TAGS = [
+  // R1 matches only `night` (1:1) — the synth route's `route_id`
+  // mapping is the same as the routes table.
+  { tag_id: 'night', route_id: 'R1', tag_label: 'Noapte', priority: 3 },
+  // R2 matches two tags (1:many) — school + metroline. The
+  // extension table's whole point is to carry both rows.
+  { tag_id: 'school', route_id: 'R2', tag_label: 'Transport Elevi', priority: 1 },
+  { tag_id: 'metroline', route_id: 'R2', tag_label: 'Metropolitan', priority: 5 },
+];
 
 const WORK = join(tmpdir(), `adapter-static-ext-${Date.now()}`);
 const SQLITE_PATH = join(WORK, 'feeds.sqlite3');
@@ -152,12 +164,14 @@ afterAll(() => {
 });
 
 describe('staticExtension', () => {
-  it('adds networks.network_color + _neary_config + applies route fixup + computes network colors', async () => {
-    const ext = staticExtension({ timing: TIMING_BLOCK });
+  it('adds networks.network_color + _neary_config + _route_tags + applies route fixup + computes network colors', async () => {
+    const ext = staticExtension({ timing: TIMING_BLOCK, routeTags: SYNTHETIC_ROUTE_TAGS });
     expect(ext.columnExtensions).toEqual([
       { table: 'networks', column: ['network_color', 'TEXT'] },
     ]);
-    expect(Object.keys(ext.tableExtensions ?? {})).toEqual(['_neary_config']);
+    // Both extension tables are registered (DDL-only, no rows here —
+    // rows live in the tableExtensions.rows field).
+    expect(Object.keys(ext.tableExtensions ?? {}).sort()).toEqual(['_neary_config', '_route_tags']);
     expect(ext.fillComputedColumns).toBeDefined();
 
     const db = runExtension(ext);
@@ -183,6 +197,22 @@ describe('staticExtension', () => {
       expect(cfgRows).toEqual([
         { key: 'timing', value: JSON.stringify(TIMING_BLOCK) },
       ]);
+
+      // _route_tags rows — the full n:m mapping (R2 = school + metroline).
+      // DDL is asserted (table exists, columns match the spec) and
+      // rows match the structured input (no reverse-parse, no dedup).
+      const tagColumns = db.prepare("PRAGMA table_info('_route_tags')").all() as Array<{ name: string }>;
+      const colNames = tagColumns.map((c) => c.name).sort();
+      expect(colNames).toEqual(['priority', 'route_id', 'tag_id', 'tag_label']);
+      const tagRows = db.prepare('SELECT tag_id, route_id, tag_label, priority FROM _route_tags ORDER BY route_id, priority').all() as Array<{ tag_id: string; route_id: string; tag_label: string; priority: number }>;
+      expect(tagRows).toEqual([
+        { tag_id: 'night', route_id: 'R1', tag_label: 'Noapte', priority: 3 },
+        { tag_id: 'school', route_id: 'R2', tag_label: 'Transport Elevi', priority: 1 },
+        { tag_id: 'metroline', route_id: 'R2', tag_label: 'Metropolitan', priority: 5 },
+      ]);
+      // 1:many invariant — R2 has 2 rows.
+      const r2Count = db.prepare("SELECT COUNT(*) AS c FROM _route_tags WHERE route_id = 'R2'").get() as { c: number };
+      expect(r2Count.c).toBe(2);
     } finally {
       db.close();
     }
@@ -194,11 +224,41 @@ describe('staticExtension', () => {
     buildSyntheticSqlite();
     const ext = staticExtension({});
     expect((ext.tableExtensions?._neary_config?.rows?.length ?? 0)).toBe(0);
+    // _route_tags table is still registered (DDL-only) even with no
+    // rows — consumers can `SELECT ... LIMIT 0` without an error.
+    expect(ext.tableExtensions?._route_tags?.rows?.length ?? 0).toBe(0);
+    expect(ext.tableExtensions?._route_tags?.columns.length).toBe(4);
 
     const db = runExtension(ext);
     try {
       const cfgRows = db.prepare('SELECT COUNT(*) AS c FROM _neary_config').get() as { c: number };
       expect(cfgRows.c).toBe(0);
+      // _route_tags table exists but is empty.
+      const tagCount = db.prepare('SELECT COUNT(*) AS c FROM _route_tags').get() as { c: number };
+      expect(tagCount.c).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('handles null tag_label + priority (defensive against partial feedConfig)', async () => {
+    // The orchestrator might pass rows where `tag_label` or
+    // `priority` are missing (e.g. the `_route_tags.txt` parser
+    // produced rows with empty optional columns). The static
+    // extension must coerce them to NULL, not crash.
+    rmSync(WORK, { recursive: true, force: true });
+    buildSyntheticSqlite();
+    const ext = staticExtension({
+      routeTags: [
+        { tag_id: 'school', route_id: 'R1' /* no tag_label, no priority */ },
+      ],
+    });
+    const db = runExtension(ext);
+    try {
+      const rows = db.prepare('SELECT tag_id, route_id, tag_label, priority FROM _route_tags').all() as Array<{ tag_id: string; route_id: string; tag_label: string | null; priority: number | null }>;
+      expect(rows).toEqual([
+        { tag_id: 'school', route_id: 'R1', tag_label: null, priority: null },
+      ]);
     } finally {
       db.close();
     }

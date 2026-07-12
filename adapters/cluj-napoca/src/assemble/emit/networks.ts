@@ -7,27 +7,31 @@ import { type RouteRow, networksToTxt, routeNetworksToTxt } from '@n3ary/gtfs-sp
  * Emit GTFS `networks.txt` + `route_networks.txt` from classified routes.
  *
  * Per the GTFS spec (https://gtfs.org/schedule/reference/#networkstxt),
- * networks are groupings of routes — operators use them for service
- * families (TfL: "Underground", "Buses", "Overground"). We extend that
- * semantic to service classes (school, festival, night) — the spec
- * doesn't constrain networks to operator groupings, and the many-to-many
- * `route_networks.txt` join handles the cases we need.
+ * networks are groupings of routes. Per gtfs-adapters#26, this adapter
+ * emits exactly **2** networks for cluj-napoca:
  *
- * **Why both networks.txt and route_desc?** Two consumers:
+ *   1. `school` (Transport Elevi) -- routes whose `route_short_name`
+ *      starts with `TE`. Transport Elevi is a separate contracted
+ *      operator for school transport.
+ *   2. `normal` (Normal) -- every other route. Catch-all network.
  *
- *   1. Consumers reading `route_desc` directly (current pattern across
- *      GTFS tooling) get the human label for free — `route_desc` is set
- *      to the same string as `network_name` for the matching network.
- *   2. Consumers using `route_networks.txt` get a structured
- *      `network_id` they can map to icons, colors, and per-feed styling
- *      without parsing free text.
+ * **Service-class taxonomy** (special / festival / night / airport /
+ * metroline) lives ONLY in `route_desc` as comma-joined labels. These
+ * are tags, not networks -- per the public GTFS spec, `route_networks.txt`
+ * is 1:1 by `route_id`, so n:m tag membership has to live somewhere
+ * else. `route_desc` is the simple, portable choice.
  *
- * Keeping `route_desc == network_name` means the two paths stay in sync
- * — if you change a label in CATEGORIES, both surfaces update.
+ * **Why 2 networks and not 1**: a route is either in the `school`
+ * network (TE* short_name) or in the `normal` network. The 1:1
+ * constraint is satisfied by construction: every route belongs to
+ * exactly one of the two networks. The previous design emitted
+ * multiple networks (one per used tag) which violated the public
+ * spec's 1:1 rule (issue #4). This is the simplified, 2-network
+ * resolution of gtfs-adapters#26.
  *
- * **Empty case**: if no routes match any category, both files are empty
- * strings (the orchestrator in `src/assemble/index.js` drops empty
- * optional files from the published zip).
+ * **Empty case**: if no routes exist, both files are empty strings
+ * (the orchestrator in `src/assemble/index.js` drops empty optional
+ * files from the published zip).
  *
  * Writers: `networksToTxt` + `routeNetworksToTxt` come from
  * `@n3ary/gtfs-spec/serialize` (spec 0.5.3+). They give us RFC 4180
@@ -36,79 +40,76 @@ import { type RouteRow, networksToTxt, routeNetworksToTxt } from '@n3ary/gtfs-sp
  * containing a comma.
  */
 
-import { getAllCategories } from '../merge/routeCategory.ts';
+import { getAllNetworks } from '../merge/routeCategory.ts';
 
 /**
  * Build the CSV bodies for `networks.txt` and `route_networks.txt`.
  *
+ * **Reads from the structured `routeNetworks` map** populated by
+ * `applyRouteCategory` -- does NOT parse `route_desc` (the previous
+ * design did; that roundtrip is fragile and was the source of the
+ * 1:many violation that gtfs-adapters#4 fixed).
+ *
  * @param {Array<Pick<RouteRow, 'route_id' | 'route_short_name' | 'route_long_name' | 'route_desc'>>} routes
- *   The reconciled route rows — must have `route_desc` already populated
- *   by `applyCategory` in `merge/routeCategory.js`.
+ *   The reconciled route rows. Used only to iterate the route set in
+ *   a stable order -- the per-route network assignment is in
+ *   `routeNetworks`.
+ * @param {Map<string, { id: string, label: string }>} routeNetworks
+ *   Per-route network assignment from `applyRouteCategory`. Each
+ *   entry is `school` (TE* routes) or `normal` (everything else).
+ *   Routes that don't appear in the map are silently skipped
+ *   (defensive -- shouldn't happen in practice; the orchestrator
+ *   always sets a network for every route).
  * @returns {{
  *   networksTxt: string,
  *   routeNetworksTxt: string,
  *   networkUsage: Map<string, number>,
  * }}
- *   - `networksTxt`: CSV body for `networks.txt`. Empty if no categories
- *     are used (caller should drop the file from the zip).
- *   - `routeNetworksTxt`: CSV body for `route_networks.txt`. Empty if no
- *     routes have a category.
- *   - `networkUsage`: id → count, for build-log INFO summaries.
+ *   - `networksTxt`: CSV body for `networks.txt`. Always emits the
+ *     header + 2 data rows (`school`, `normal`) when the feed has
+ *     at least one route in each network; networks with zero routes
+ *     are dropped. Empty if the feed has no routes.
+ *   - `routeNetworksTxt`: CSV body for `route_networks.txt`. One row
+ *     per route, in `route_id` order (sorted lexically for diff-
+ *     stability across builds).
+ *   - `networkUsage`: id -> count, for build-log INFO summaries.
  */
-export function buildNetworks(routes) {
-  const allCategories = getAllCategories();
-
-  // Build a lookup from label (which is what route_desc holds) to category.
-  // Doing it via label keeps `route_desc == network_name` the contract.
-  // route_desc can be a single label ("Metropolitan") or comma-separated
-  // ("Transport Elevi, Metropolitan") for routes that match multiple
-  // categories — see applyRouteCategory in routeCategory.js. We split on
-  // comma and emit one route_networks.txt row per label so the n:m mapping
-  // survives intact.
-  const byLabel = new Map(allCategories.map((c) => [c.label, c]));
+export function buildNetworks(routes, routeNetworks) {
+  const allNetworks = getAllNetworks();
 
   /** @type {Map<string, number>} */
   const networkUsage = new Map();
 
+  // Build the route_networks rows. Iterate `routes` (the
+  // orchestrator-supplied canonical order) so the emitted CSV
+  // is diff-stable across builds that produce the same input.
+  // Each row is one (network_id, route_id) -- 1:1 by route_id
+  // per the public GTFS spec.
   /** @type {Array<[string, string]>} */
   const routeNetworkRows = [];
-
-  // Per GTFS spec, a route can belong to AT MOST ONE network. The
-  // route_desc → category mapping can legitimately classify a route
-  // under multiple categories (e.g. "Transport Elevi, Metropolitan"
-  // — both match — see applyRouteCategory in routeCategory.js), which
-  // would emit multiple route_networks rows for the same route_id
-  // and violate the PRIMARY KEY (route_id) on route_networks.
-  //
-  // Dedup by route_id: first category wins. This preserves the more
-  // specific network (Transport Elevi) over the more general one
-  // (Metropolitan), since categories are ordered with specific ones
-  // first in getAllCategories(). networkUsage still counts every
-  // classification — only the emitted row is deduped — so build-log
-  // INFO summaries stay accurate.
-  const seenRouteIds = new Set<string>();
   for (const r of routes) {
-    const desc = (r.route_desc ?? '').toString();
-    if (!desc) continue; // regular urban — no network assignment
-    const labels = desc.split(',').map((s) => s.trim()).filter(Boolean);
-    if (labels.length === 0) continue;
-    if (seenRouteIds.has(r.route_id)) continue;
-    for (const label of labels) {
-      const cat = byLabel.get(label);
-      if (!cat) continue; // route_desc isn't a known label — shouldn't happen
-      networkUsage.set(cat.id, (networkUsage.get(cat.id) ?? 0) + 1);
-      routeNetworkRows.push([cat.id, r.route_id]);
-      // First category wins; break after the first hit so more
-      // specific labels take precedence over general ones.
-      break;
-    }
-    seenRouteIds.add(r.route_id);
+    const network = routeNetworks.get(r.route_id);
+    if (!network) continue; // defensive: orchestrator always sets a network
+    networkUsage.set(network.id, (networkUsage.get(network.id) ?? 0) + 1);
+    routeNetworkRows.push([network.id, r.route_id]);
   }
 
-  // Only emit network rows that are actually used — keeps the file lean.
-  const networkRows = allCategories
-    .filter((c) => networkUsage.has(c.id))
-    .map((c) => [c.id, c.label] as [string, string]);
+  // Sort the route_networks rows by route_id for diff-stability
+  // (the input-order tie-breaker doesn't carry semantic meaning,
+  // and any deterministic order is more debuggable than input order).
+  routeNetworkRows.sort((a, b) => {
+    if (a[0] !== b[0]) return a[0].localeCompare(b[0]); // network_id first
+    return a[1].localeCompare(b[1]); // then route_id
+  });
+
+  // Only emit network rows that are actually used -- keeps the file
+  // lean. Declared in `getAllNetworks` order (school, normal) for
+  // diff-stability. In practice every populated feed has at least
+  // one `normal` route, so `normal` is virtually always present;
+  // `school` is conditional on having at least one TE* route.
+  const networkRows = allNetworks
+    .filter((n) => networkUsage.has(n.id))
+    .map((n) => [n.id, n.label] as [string, string]);
 
   const networksTxt = networksToTxt(networkRows);
   const routeNetworksTxt = routeNetworksToTxt(routeNetworkRows);
@@ -120,12 +121,14 @@ export function buildNetworks(routes) {
  * Format a build-log INFO summary of network usage.
  *
  * @param {Map<string, number>} networkUsage
- * @returns {string} single-line summary, empty if no categories used
+ * @returns {string} single-line summary, empty if no networks used
  */
 export function formatNetworkUsageSummary(networkUsage) {
   if (networkUsage.size === 0) return '';
+  // Sort by id for diff-stability (Map iteration order is
+  // insertion order in V8, but we don't want to depend on that).
   const parts = [];
-  for (const [id, count] of networkUsage) {
+  for (const [id, count] of [...networkUsage].sort(([a], [b]) => a.localeCompare(b))) {
     parts.push(`${count} ${id}`);
   }
   return parts.join(', ');

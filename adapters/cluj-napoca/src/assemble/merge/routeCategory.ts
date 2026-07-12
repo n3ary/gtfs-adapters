@@ -3,67 +3,122 @@ import { type RouteRow } from '@n3ary/gtfs-spec/spec';
 /**
  * Route category classification + long_name cleanup.
  *
- * Single source of truth for which network each route belongs to and how
- * to clean up Tranzy's messy `route_long_name` into start-end format.
+ * Single source of truth for which **network** each route belongs to,
+ * which **tag** labels it earns, and how to clean up Tranzy's messy
+ * `route_long_name` into start-end format.
+ *
+ * ## The network-vs-tag split (issue #26)
+ *
+ * Per the user-facing spec for this adapter (gtfs-adapters#26):
+ *
+ *   - **Networks** (`networks.txt` + `route_networks.txt`) carry the
+ *     operator/service identity. Exactly **2** networks are emitted:
+ *
+ *       1. `school` (Transport Elevi) -- routes whose `route_short_name`
+ *          starts with `TE` (TE1..TE14, TE-OG). Transport Elevi is a
+ *          separate contracted operator for school transport.
+ *       2. `normal` (Normal) -- every other route. Catch-all network.
+ *
+ *     The "1:1 by route_id" rule of the public GTFS spec is satisfied
+ *     by construction: each route belongs to exactly one of the two
+ *     networks.
+ *
+ *   - **Tags** (rendered as the comma-joined label list in `route_desc`)
+ *     carry the service-class taxonomy. Exactly **5** tags exist:
+ *
+ *       1. `special` (Cursa Speciala)   -- CS / "CURSA SPECIALA"
+ *       2. `festival` (Untold)          -- *U suffix / "untold"
+ *       3. `night` (Noapte)             -- *N suffix / "noapte"
+ *       4. `airport` (Aeroport Expres)  -- A\d short / "aeroport"
+ *       5. `metroline` (Metropolitan)   -- M\d short_name
+ *
+ *     A route can carry multiple tags (1:many), e.g. M26U is both
+ *     `festival` AND `metroline` -- `route_desc = "Untold, Metropolitan"`.
+ *     The membership is exposed to consumers via `route_desc` only;
+ *     no structured `route_networks.txt` row is emitted for tag matches.
+ *
+ *   - The **school** designation is "network only, no tag". A TE route
+ *     is in the `school` network AND has no service-class tag (unless
+ *     it also happens to match e.g. `metroline`, in which case it has
+ *     the metroline tag -- but no "Transport Elevi" tag).
+ *
+ *   - The M7x metroline family (M75A..M79C) used to be partially tagged
+ *     as `school` because their `route_long_name` starts with
+ *     "TE\d+ Floresti". Under the new model, the overbroad long_name
+ *     match for school is gone (school is network-only now), so the
+ *     M7x family has just the `metroline` tag and lives in the
+ *     `normal` network -- same operational semantics as before
+ *     (Florești metroline services that happen to also serve school
+ *     destinations), with a cleaner data shape.
+ *
+ * ## Why split networks from tags
+ *
+ *   - The public GTFS spec's `route_networks.txt` is 1:1 by `route_id`
+ *     (PRIMARY KEY on `route_id`). Issue #4 fixed the previous
+ *     1:many-violation. The tag membership is 1:many and has to live
+ *     somewhere else -- `route_desc` is the simple, portable choice.
+ *   - A future `_route_tags` extension (issue #25) can layer on top
+ *     of this without changing the network surface.
+ *
+ * ## Background
+ *
+ * The classifier runs once at assemble time. Consumers just read the
+ * structured fields from `routes.txt` + `networks.txt` +
+ * `route_networks.txt` and don't parse free-text signals.
+ *
+ *   - Tranzy exposes only basic route fields (no service-class
+ *     column), so tag info is buried as patterns in `route_short_name`
+ *     (`*N`, `*U`, `M*`, `CS`, `TE*`, etc.) and trailing parentheticals
+ *     in `route_long_name` / `route_desc` ("(untold)", "(traseu M21)").
+ *   - The adapter parses those patterns once here, writes the result
+ *     as standard GTFS fields (`route_desc` for tag labels,
+ *     `networks.txt` + `route_networks.txt` for the network mapping),
+ *     and emits cleaned `route_long_name` in start-end format (with
+ *     a stop_times-based fallback for routes where cleaning leaves
+ *     it empty).
+ *   - `route_short_name` keeps Tranzy's value verbatim -- the
+ *     operator's chosen rider-facing identifier (e.g. `25N`, `TE1`,
+ *     `M76A`) is the GTFS-spec way to carry service-class info,
+ *     and we don't munge it.
+ *
+ * **Calendar windows** (school-year-only, festival-only) are *not*
+ * tracked here -- they're a property of the schedule view, orthogonal
+ * to the route's tag. See neary#129 for the ingestion work.
  */
 
 import { terminalNamesMatch, normalizeStopName } from '../emit/trips.ts';
 
 /**
- * The classifier runs once at assemble time; consumers (neary) just read
- * the structured fields from `routes.txt` + `networks.txt` +
- * `route_networks.txt` and don't have to parse free-text signals.
+ * Categories, ordered most-specific first within each surface.
  *
- * **Background**: see neary#125 for the design discussion. Briefly:
+ * Each entry: `{ id, label, surface, match(s, l, d) }` where
  *
- * - Tranzy exposes only basic route fields (no service-class column),
- *   so category info is buried as patterns in `route_short_name` (TE*,
- *   *N, *U, M*, CS, etc.) and trailing parentheticals in
- *   `route_long_name` / `route_desc` ("(untold)", "(traseu M21)").
- * - The adapter parses those patterns once here, writes the result as
- *   standard GTFS fields (`route_desc` for the human label,
- *   `networks.txt` + `route_networks.txt` for the structured mapping),
- *   and emits cleaned `route_long_name` in start-end format (with a
- *   stop_times-based fallback for routes where cleaning leaves it empty).
- * - `route_short_name` keeps Tranzy's value verbatim — the operator's
- *   chosen rider-facing identifier (e.g. `25N`, `TE1`, `M76A`) is the
- *   GTFS-spec way to carry service-class info, and we don't munge it.
+ *   - `id` is the machine-readable identifier (network_id in
+ *     `networks.txt`, the tag_id in `route_desc`).
+ *   - `label` is the human-readable string -- for networks it
+ *     becomes `networks.txt` `network_name`; for tags it becomes
+ *     one entry of the comma-joined `route_desc`.
+ *   - `surface` is either `'tag'` (drives `route_desc` labels,
+ *     multiple allowed per route) or `'network'` (drives
+ *     `networks.txt` + `route_networks.txt`, exactly one per route).
+ *   - `match` is a predicate over `(route_short_name, route_long_name,
+ *     route_desc)`. We check all three because Tranzy sometimes
+ *     carries the signal in just one -- e.g. "(untold)" annotation
+ *     lands in `route_desc` for festival routes.
  *
- * **Classification**: 1:1 with priority. Most-specific category wins.
- * `TE1` and `25N` are unambiguous (school / night respectively). Edge
- * cases (e.g. `M76A` whose `long_name` starts with `TE2 Floresti`) are
- * resolved by the school pattern's checks across all three fields.
+ * Declaration order matters in two ways:
+ *   1. The `surface: 'tag'` entries are listed in CATEGORIES order
+ *      for the comma-join in `route_desc` (specific first, e.g.
+ *      `special` before `metroline`).
+ *   2. The `surface: 'network'` entries are listed in CATEGORIES
+ *      order for the `networks.txt` row order. `school` is declared
+ *      first, `normal` is declared last; networks.txt emits them
+ *      in that order.
  *
- * **Calendar windows** (school-year-only, festival-only) are *not*
- * tracked here — they're a property of the schedule view, orthogonal to
- * the route's category. See neary#129 for the ingestion work.
- */
-
-/**
- * Categories, ordered most-specific first. First match wins.
+ * Add new entries at the END so existing priorities stay stable.
  *
- * Each entry: `{ id, label, match(s, l, d) }` where
- *   - `id` is the network_id (machine-readable, kebab-case-ish)
- *   - `label` is the human-readable string that goes into `route_desc`
- *     AND into `networks.txt` `network_name`. Keeping these aligned
- *     means consumers reading `route_desc` directly get the same string
- *     they'd get from joining `route_networks.txt` → `networks.txt`.
- *     Labels are in Romanian to match the operator's terminology
- *     ("Noapte", "Metropolitan" — Cluj-CTP's own term for the
- *     suburban bus network is "Metropolitan" per ctpcj.ro).
- *   - `match` is a predicate over (route_short_name, route_long_name,
- *     route_desc). We check all three because Tranzy sometimes carries
- *     the signal in just one — e.g. "(untold)" annotation lands in
- *     route_desc for festival routes, "Transport Elevi X" lands in
- *     long_name for school buses. Case-insensitive substring matching
- *     on long_name and route_desc so operator-named variants work.
- *
- * Add new categories at the END of this list so existing priorities stay
- * stable. Bumping a category earlier = behavior change for routes that
- * match multiple patterns.
- *
- * **`commuter` was removed**: D51 (the only `D*`-prefixed route) is not
- * a commuter rail service — per ctpcj.ro it's an employee-only /
+ * **`commuter` was removed**: D51 (the only `D*`-prefixed route) is
+ * not a commuter rail service -- per ctpcj.ro it's an employee-only /
  * convention transport route, not a public commuter pattern. If a
  * future feed has a genuine commuter service, it can be re-added here
  * with a more specific pattern.
@@ -72,31 +127,36 @@ export const CATEGORIES = [
   {
     id: 'special',
     label: 'Cursa Speciala',
+    surface: 'tag',
     match: (s, l, d) =>
       s === 'CS' || /CURSA SPECIALA/i.test(l) || /CURSA SPECIALA/i.test(d),
   },
   {
     id: 'school',
     label: 'Transport Elevi',
-    // School buses appear under two patterns in Tranzy:
-    //   1. `TE*` short_name (urban: TE1..TE14, TE-OG)
-    //   2. Any route whose short_name, long_name, or route_desc
-    //      contains "elevi" case-insensitively — defensive against
-    //      operator-named variants CTP may introduce later.
+    surface: 'network',
+    // School-network routes are the Transport Elevi (TE) operator's
+    // routes. The match is intentionally broad -- TE-prefixed
+    // `route_short_name` (TE1..TE14, TE-OG), TE-prefixed `long_name`
+    // (the M7x school-bus family: M76A with long_name "TE1 Floresti
+    // ..." or "TE1F"), and the defensive `elevi` substring catch
+    // across all 3 fields (catches operator-named variants CTP may
+    // introduce later, e.g. "ELEVI-99" or a long_name with "Transport
+    // Elevi -").
     //
-    // Note: the M7x school-bus family (M75A..M79C) is metroline-shaped
-    // (M* prefix). After PR review we dropped the M7x-specific short_name
-    // regex — those routes fall through to `metroline` only. The "elevi"
-    // substring check would catch them if their long_name ever explicitly
-    // says "elevi"; until then they're classified as regular metroline
-    // routes, which is also factually correct (they're Florești metroline
-    // services that happen to also serve school destinations).
+    // School is a NETWORK, not a tag (gtfs-adapters#26). The M7x
+    // family lands in the school network AND the metroline tag (M*
+    // short_name) -- so 1 network + 1 tag. A defensive `elevi`
+    // substring match in a route's long_name / route_desc puts the
+    // route in the school network without surfacing a "Transport
+    // Elevi" tag in route_desc (school isn't a tag).
     match: (s, l, d) =>
       /^TE/i.test(s) ||
       /^TE/i.test(l) ||  // M7x school-bus family: long_name="TE1F",
-                         // "TE1 Floresti", "TE2 Floresti" (Tranzy keeps
-                         // the school designation as long_name even
-                         // though short_name has the M* metroline prefix).
+                         // "TE1 Floresti", "TE2 Floresti" (Tranzy
+                         // keeps the school designation as long_name
+                         // even though short_name has the M* metroline
+                         // prefix).
       /elevi/i.test(s) ||
       /elevi/i.test(l) ||
       /elevi/i.test(d),
@@ -104,8 +164,9 @@ export const CATEGORIES = [
   {
     id: 'festival',
     label: 'Untold',
-    // Festival services (Untold Music Festival in Cluj). The signal is
-    // either:
+    surface: 'tag',
+    // Festival services (Untold Music Festival in Cluj). The signal
+    // is either:
     //   - `*U` suffix in short_name (`30U`, `M26U`)
     //   - "untold" substring in long_name or route_desc (Tranzy's
     //     parenthetical "(untold)" in long_name OR plain "Untold" in
@@ -118,6 +179,7 @@ export const CATEGORIES = [
   {
     id: 'night',
     label: 'Noapte',
+    surface: 'tag',
     // Night services. Signal is `*N` suffix or "noapte" substring
     // (Romanian for "night"; Tranzy uses "Disp." prefix on headsigns
     // for depot-relative direction, but the long_name/desc sometimes
@@ -130,6 +192,7 @@ export const CATEGORIES = [
   {
     id: 'airport',
     label: 'Aeroport Expres',
+    surface: 'tag',
     match: (s, l, d) =>
       /^A\d/.test(s) ||
       /aeroport/i.test(l) ||
@@ -138,22 +201,46 @@ export const CATEGORIES = [
   {
     id: 'metroline',
     label: 'Metropolitan',
+    surface: 'tag',
     // Cluj-CTP's own term for the suburban/metroline bus network is
     // "Metropolitan" (per ctpcj.ro). Used in the consumer-facing label
     // because that's what riders search for on the agency site.
     match: (s) => /^M\d/.test(s),
   },
+  {
+    id: 'normal',
+    label: 'Normal',
+    surface: 'network',
+    // Catch-all network for routes that don't match `school`. The
+    // `match` returns false by design -- normal is not a pattern, it's
+    // the fallback. `applyRouteCategory` assigns the normal network
+    // to every route that didn't match `school` (which is every
+    // non-TE route, since the only network predicate is TE*).
+    match: () => false,
+  },
 ];
 
+/** Tag entries only (subset of CATEGORIES where `surface === 'tag'`). */
+const TAG_ENTRIES = CATEGORIES.filter((c) => c.surface === 'tag');
+
+/** Network entries only (subset of CATEGORIES where `surface === 'network'`). */
+const NETWORK_ENTRIES = CATEGORIES.filter((c) => c.surface === 'network');
+
 /**
- * Classify a single route, returning all matching categories in
- * priority order (CATEGORIES declaration order). Empty array for
- * regular urban routes that match nothing.
+ * Classify a single route's tag list. Returns all matching tag-surface
+ * categories in declaration order (CATEGORIES order). Empty array for
+ * regular urban routes that match no tag.
  *
- * **1:many is intentional**: a route can belong to multiple networks.
- * The classic case is `M76A` — short_name is `M7[5-9][A-Z]?` (matches
- * school) AND starts with `M\d` (matches metroline). One route, two
- * networks. `route_networks.txt` carries the n:m mapping natively.
+ * **1:many is intentional**: a route can carry multiple tags. The
+ * classic case is `M26U` -- `*U` suffix (festival) AND `M*` prefix
+ * (metroline). One route, two tags. `route_desc` carries the n:m
+ * mapping natively as the comma-joined label list.
+ *
+ * **Does not include the route's network**. Network assignment is a
+ * separate call (`classifyNetwork` / `applyRouteCategory`); the
+ * network and tag surfaces are independent -- e.g. an M26U is in the
+ * `normal` network and tagged as `festival, metroline`. The school
+ * network is a network-only surface, not a tag.
  *
  * @param {{ route_short_name?: string, route_long_name?: string, route_desc?: string }} row
  * @returns {Array<{ id: string, label: string }>}
@@ -163,7 +250,7 @@ export function classifyRoute(row) {
   const l = (row.route_long_name ?? '').toString();
   const d = (row.route_desc ?? '').toString();
   const matches = [];
-  for (const cat of CATEGORIES) {
+  for (const cat of TAG_ENTRIES) {
     if (cat.match(s, l, d)) {
       matches.push({ id: cat.id, label: cat.label });
     }
@@ -172,29 +259,63 @@ export function classifyRoute(row) {
 }
 
 /**
+ * Classify a single route's network. Returns exactly one network
+ * entry: `school` (TE* short_name) or `normal` (the fallback for
+ * everything else). The networks.txt schema enforces 1:1 by
+ * `route_id`; this function guarantees the same.
+ *
+ * Exposed for tests + the orchestrator. The internal loop walks
+ * NETWORK_ENTRIES in declaration order; `school` is declared first
+ * so TE* routes pick it up before the normal fallback fires.
+ *
+ * @param {{ route_short_name?: string, route_long_name?: string, route_desc?: string }} row
+ * @returns {{ id: string, label: string }}
+ */
+export function classifyNetwork(row) {
+  const s = (row.route_short_name ?? '').toString();
+  const l = (row.route_long_name ?? '').toString();
+  const d = (row.route_desc ?? '').toString();
+  for (const cat of NETWORK_ENTRIES) {
+    if (cat.id === 'normal') continue; // normal is the fallback, not a pattern
+    if (cat.match(s, l, d)) {
+      return { id: cat.id, label: cat.label };
+    }
+  }
+  const normal = NETWORK_ENTRIES.find((c) => c.id === 'normal');
+  // `normal` is always in NETWORK_ENTRIES (declared at the end of
+  // CATEGORIES). Defensive default if it ever gets removed.
+  return normal
+    ? { id: normal.id, label: normal.label }
+    : { id: 'normal', label: 'Normal' };
+}
+
+/**
  * Apply the standard cleanup regex passes to a free-text value (long_name
  * OR desc). Shared between `cleanLongName` and `cleanDesc` so the two
- * fields stay in sync — if we strip a parenthetical on one, we strip it
+ * fields stay in sync -- if we strip a parenthetical on one, we strip it
  * on the other.
  *
  * Operations, in order:
  *
- *   1. CURSA SPECIALA (`CS`) → empty. No fixed endpoints — calling it
+ *   1. CURSA SPECIALA (`CS`) -> empty. No fixed endpoints -- calling it
  *      "CURSA SPECIALA" is noise that consumers shouldn't have to
  *      special-case.
  *   2. Strip trailing parenthetical annotations: "(untold)", "(traseu
  *      M21)", "(traseu M21) (something else)". When `captureStripped`
  *      is true, the parenthetical CONTENTS are collected (e.g. "untold",
  *      "traseu M21") so the orchestrator can pipe them into `route_desc`
- *      as informational annotations on un-categorized routes.
+ *      as informational annotations on un-tagged routes.
  *   3. Strip "Transport Elevi -" / "Transport Elevi " prefix for school
  *      routes whose Tranzy data describes the service class rather than
- *      the endpoints ("Transport Elevi Manastur" → "Manastur"). For
+ *      the endpoints ("Transport Elevi Manastur" -> "Manastur"). For
  *      richer start-end extraction (e.g. "Primaverii - Onisifor Ghibu"
- *      for TE1) the CTP website source is required — tracked in
+ *      for TE1) the CTP website source is required -- tracked in
  *      neary#129.
  *   4. Strip "TE\d+ Floresti" prefix from Tranzy for the M7x school-bus
  *      family. MUST run BEFORE the generic TE-prefix strip below.
+ *      (Kept for the live data shape even though those routes are no
+ *      longer classified as school; the M7x family still benefits from
+ *      the cleanup.)
  *   5. Strip remaining "TE\d+" / "TE-OG" prefix noise.
  *
  * **Returns**: when `captureStripped` is true, `{ cleaned, stripped }`
@@ -220,7 +341,7 @@ function cleanText(row, value, captureStripped = false) {
   const stripped = [];
 
   // Strip trailing parentheticals. Greedy on the right edge so that
-  // "Foo (a) (b)" strips both → "Foo" and captures ["a", "b"].
+  // "Foo (a) (b)" strips both -> "Foo" and captures ["a", "b"].
   if (captureStripped) {
     t = t.replace(/\s*\(([^)]*)\)\s*$/g, (_match, content) => {
       const c = content.trim();
@@ -235,12 +356,12 @@ function cleanText(row, value, captureStripped = false) {
   t = t.replace(/^Transport Elevi[- ]+/i, '');
 
   // "TE\d+ Floresti" prefix (M7x school-bus family).
-  //   "TE2 Floresti str. Somesului..." → "str. Somesului..."
+  //   "TE2 Floresti str. Somesului..." -> "str. Somesului..."
   t = t.replace(/^TE\d+\s+Floresti\s*/i, '');
 
   // "TE\d+" / "TE-OG" leftover prefix.
-  //   "TE1 Manastur" → "Manastur"
-  //   "TE-OG Sala Sporturilor" → "Sala Sporturilor"
+  //   "TE1 Manastur" -> "Manastur"
+  //   "TE-OG Sala Sporturilor" -> "Sala Sporturilor"
   t = t.replace(/^TE-?[A-Z0-9]+[- ]+/i, '');
 
   const cleaned = t.trim();
@@ -270,7 +391,7 @@ function cleanText(row, value, captureStripped = false) {
  * to `deriveLongNameFromStops()` in those cases.
  *
  * @param {{ route_short_name?: string, route_long_name?: string }} row
- * @returns {string} cleaned long_name (may be empty — see note above)
+ * @returns {string} cleaned long_name (may be empty -- see note above)
  */
 export function cleanLongName(row) {
   return cleanText(row, row?.route_long_name ?? '');
@@ -280,15 +401,15 @@ export function cleanLongName(row) {
  * Clean `route_desc` with the same regex passes as `cleanLongName`.
  *
  * Tranzy's `route_desc` carries the same kind of free-text noise as
- * `route_long_name` does — parenthetical annotations, "Transport Elevi"
+ * `route_long_name` does -- parenthetical annotations, "Transport Elevi"
  * prefixes, etc. Cleaning it symmetrically means:
  *
- *   - For un-categorized routes (no category match), `route_desc` keeps
- *     the descriptive text Tranzy published (D51's "P-ta Mihai Viteazu -
+ *   - For un-tagged routes (no tag match), `route_desc` keeps the
+ *     descriptive text Tranzy published (D51's "P-ta Mihai Viteazu -
  *     Gilau" survives; CS's empty desc stays empty).
- *   - For categorized routes, `route_desc` is overwritten with the
- *     comma-separated category labels (the canonical structured
- *     representation), so the desc-fallback case for un-categorized
+ *   - For tagged routes, `route_desc` is overwritten with the
+ *     comma-separated tag labels (the canonical structured
+ *     representation), so the desc-fallback case for un-tagged
  *     routes doesn't get mixed in.
  *
  * @param {{ route_short_name?: string, route_desc?: string }} row
@@ -332,7 +453,7 @@ export function deriveLongNameFromStops({ routeId, allStopTimeRows, tripToRoute,
   }
   if (byTrip.size === 0) return '';
 
-  // Pick the longest trip (most stop_times) — the canonical variant.
+  // Pick the longest trip (most stop_times) -- the canonical variant.
   let bestTrip = null;
   let bestCount = -1;
   for (const [tripId, sts] of byTrip) {
@@ -350,7 +471,7 @@ export function deriveLongNameFromStops({ routeId, allStopTimeRows, tripToRoute,
   if (!first?.stop_name || !last?.stop_name) return '';
 
   // Avoid emitting "Same stop - Same stop" for circular / single-stop
-  // services — those cases deserve a manually-curated long_name.
+  // services -- those cases deserve a manually-curated long_name.
   if (first.stop_name === last.stop_name) return '';
 
   return `${first.stop_name} - ${last.stop_name}`;
@@ -358,8 +479,8 @@ export function deriveLongNameFromStops({ routeId, allStopTimeRows, tripToRoute,
 
 /**
  * Title-case a free-text annotation. Used to format parenthetical
- * content stripped during cleanup — "(untold)" → "Untold",
- * "(traseu M21)" → "Traseu M21", "(via X)" → "Via X".
+ * content stripped during cleanup -- "(untold)" -> "Untold",
+ * "(traseu M21)" -> "Traseu M21", "(via X)" -> "Via X".
  *
  * Capitalizes the first letter of each whitespace-separated token;
  * preserves the rest of the string verbatim (Romanian diacritics,
@@ -375,10 +496,10 @@ function titleCaseAnnotation(s) {
 /**
  * Token-overlap check with strict empty-tokens handling. Unlike
  * terminalNamesMatch, returns false (no match) when either side has
- * no substantial tokens (length ≥4 chars). The empty-tokens → true
- * fallback in terminalNamesMatch is wrong for structural validation —
+ * no substantial tokens (length >=4 chars). The empty-tokens -> true
+ * fallback in terminalNamesMatch is wrong for structural validation --
  * "EMERSON" would falsely "match" "C.U.G" because the latter has no
- * tokens ≥4 (just "cug" which is 3 chars after tokenize).
+ * tokens >=4 (just "cug" which is 3 chars after tokenize).
  */
 function tokenOverlap(a, b) {
   const tokenize = (s) => {
@@ -399,7 +520,7 @@ function tokenOverlap(a, b) {
 /**
  * Get the set of stop names that appear on a route's canonical pattern
  * (longest trip). Used to validate whether a desc-terminal actually
- * belongs to the route — if not, the desc's terminal is stale.
+ * belongs to the route -- if not, the desc's terminal is stale.
  *
  * @returns {Set<string> | null} Set of stop names, or null if no data
  *   available (route has no trips in stop_times).
@@ -419,7 +540,7 @@ function getRouteStopNames({ routeId, allStopTimeRows, tripToRoute, stopsByStopI
   }
   if (byTrip.size === 0) return null;
 
-  // Pick the longest trip (canonical variant) — same heuristic as
+  // Pick the longest trip (canonical variant) -- same heuristic as
   // deriveLongNameFromStops.
   let bestTrip = null;
   let bestCount = -1;
@@ -441,7 +562,7 @@ function getRouteStopNames({ routeId, allStopTimeRows, tripToRoute, stopsByStopI
 }
 
 /**
- * Detect when Tranzy's `route_desc` is just a stale long_name variant —
+ * Detect when Tranzy's `route_desc` is just a stale long_name variant --
  * a string in "X - Y" format where X matches `route_long_name`'s
  * first terminal and Y does NOT appear in the route's actual stop
  * pattern. Treats the desc as not worth surfacing.
@@ -450,7 +571,7 @@ function getRouteStopNames({ routeId, allStopTimeRows, tripToRoute, stopsByStopI
  * `route_desc` whose terminal pair differs from `route_long_name`
  * (the line was restructured and only one of the two got updated).
  * Without this check, applyRouteCategory's `descHasUniqueInfo`
- * branch preserves the stale desc as "unique info" — surfacing
+ * branch preserves the stale desc as "unique info" -- surfacing
  * contradictory terminals to consumers (e.g. route 23 shows
  * `route_long_name="P-ta M. Viteazul - C.U.G"` AND
  * `route_desc="P-ta M. Viteazul - EMERSON"`, confusing riders).
@@ -462,10 +583,10 @@ function getRouteStopNames({ routeId, allStopTimeRows, tripToRoute, stopsByStopI
  * If it doesn't, the desc's destination is stale and we drop it.
  *
  * Returns true (stale) when EITHER terminal is not on this route's
- * pattern — the desc is referencing a stop the line doesn't serve.
+ * pattern -- the desc is referencing a stop the line doesn't serve.
  *
  * Returns false (keep) when BOTH terminals appear on the route's
- * pattern — the operator intentionally references real stops.
+ * pattern -- the operator intentionally references real stops.
  */
 function isStaleLongNameVariant(cleanedDesc, cleanedLong, routeStopNames) {
   if (!cleanedDesc || !cleanedLong) return false;
@@ -478,16 +599,16 @@ function isStaleLongNameVariant(cleanedDesc, cleanedLong, routeStopNames) {
 
   // Structural check: BOTH desc terminals must appear on this route's
   // pattern. We previously required descFirst to fuzzy-match longFirst
-  // (the "same line?" check) AND descSecond to be on the route — but
+  // (the "same line?" check) AND descSecond to be on the route -- but
   // that misses the "completely different line" case where Tranzy's
   // desc has neither terminal on this route. e.g. route 42's desc
-  // "P-ta M. Viteazul - Str. Campului" — "P-ta M. Viteazul" isn't on
+  // "P-ta M. Viteazul - Str. Campului" -- "P-ta M. Viteazul" isn't on
   // route 42 at all (it's "P-ța M.Viteazu Sosire", different token),
   // yet the previous heuristic kept the desc because the first-terminal
   // fuzzy-match happened to fail and we treated "fail" as "not stale".
   //
   // If we have no pattern data (routeStopNames is null/undefined),
-  // fall back to "treat as stale" — the safer default.
+  // fall back to "treat as stale" -- the safer default.
   if (!routeStopNames) return true;
   let firstOnRoute = false;
   let secondOnRoute = false;
@@ -499,16 +620,31 @@ function isStaleLongNameVariant(cleanedDesc, cleanedLong, routeStopNames) {
 }
 
 /**
+ * Get the set of tag labels whose string matches any CATEGORIES
+ * label. Used to filter the parenthetical-content pool: a
+ * stripped "(untold)" would be redundant if the route is already
+ * tagged as `festival` (label "Untold"). The match is
+ * case-insensitive.
+ *
+ * @returns {Set<string>} lowercased tag labels
+ */
+function tagLabelSetLower() {
+  return new Set(TAG_ENTRIES.map((c) => c.label.toLowerCase()));
+}
+
+/**
  * Apply classification + cleanup + fallback to all route rows in
  * place. Single orchestrator-facing entry point.
  *
  * **Order matters** (and is intentional, not arbitrary):
  *
- *   1. **Classify** against the ORIGINAL Tranzy values, BEFORE cleanup.
- *      Why: `M76A`'s long_name `"TE2 Floresti str. Somesului - Liceul D.
- *      Tautan"` carries the school-bus signal (the `^TE\d+\s+Floresti`
- *      substring). After cleanup strips that prefix, the signal is gone.
- *      So classify first.
+ *   1. **Classify tags + network** against the ORIGINAL Tranzy
+ *      values, BEFORE cleanup. Why: `M76A`'s long_name
+ *      `"TE2 Floresti str. Somesului - Liceul D. Tautan"` no longer
+ *      carries a school signal under the new model (school is
+ *      network-only), but the same principle applies for other
+ *      signals: e.g. a parenthetical stripped by cleanup could
+ *      carry a tag signal. So classify first.
  *
  *   2. **Cleanup long_name** via `cleanText()` with `captureStripped`
  *      so we can later pipe parenthetical content into `route_desc`.
@@ -516,31 +652,37 @@ function isStaleLongNameVariant(cleanedDesc, cleanedLong, routeStopNames) {
  *   3. **Cleanup desc** via `cleanText()` with `captureStripped`,
  *      symmetric with long_name.
  *
- *   4. **route_long_name fallback chain**: cleaned long_name → cleaned
+ *   4. **route_long_name fallback chain**: cleaned long_name -> cleaned
  *      desc (when long_name ended up empty after cleanup but desc has
- *      data) → `<first stop> - <last stop>` from stop_times.
+ *      data) -> `<first stop> - <last stop>` from stop_times.
  *
- *   5. **route_desc strategy** (Marius's "all useful information in
- *      Description" rule):
- *      - Stripped parenthetical content (title-cased) is computed once
- *        as a shared pool, with anything matching a category label
- *        filtered out (so we don't redundantly surface "Untold" when
- *        the route is already classified as festival).
- *      - If classified (≥1 category): `route_desc` is the comma-joined
- *        category labels (`"Transport Elevi, Metropolitan"` for 1:many).
- *        If the parenthetical pool has non-redundant content, it's
- *        appended via " | " — e.g. TE routes whose desc ends in
- *        "(Floresti)" → `"Transport Elevi | Floresti"`, so riders see
- *        which commune the school bus serves.
- *      - Else if cleaned desc has data: `route_desc` is the cleaned
- *        desc, possibly combined with stripped parenthetical content
- *        (title-cased) that provides additional info beyond the
- *        cleaned desc.
+ *   5. **route_desc strategy** ("don't override good data" + fallback):
+ *      - Run the original "preserve good data" desc strategy: the
+ *        route's existing desc content (cleaned desc with unique
+ *        info, or stripped parenthetical content) takes priority.
+ *        The new-model classification is an ADDITIVE surface -- it
+ *        does NOT replace good data.
+ *      - Tagged case: `route_desc` is the comma-joined tag labels
+ *        (`"Untold, Metropolitan"` for an M26U). If the parenthetical
+ *        pool adds non-redundant content, it's appended via " | "
+ *        (e.g. M76A with desc "(Floresti)" -> "Metropolitan |
+ *        Floresti"). School is NOT a tag, so a school-only route
+ *        (TE1) falls through to the un-tagged branch.
+ *      - Un-tagged case: `route_desc` is the cleaned desc (if unique
+ *        info), or the parenthetical, or ''. As before.
+ *      - **Empty-desc fallback**: if the original strategy produced
+ *        an empty `route_desc` AND the route has a meaningful
+ *        classification (school network, or any tag), fill it with
+ *        the labels list (network + tag labels), omitting "Normal".
+ *        This is what surfaces "Transport Elevi" for TE routes
+ *        (school network, no tag, no cleaned desc, no parenthetical).
+ *        Regular urban routes (no tag, normal network) get an empty
+ *        desc -- the "Normal" label is omitted because it adds
+ *        noise without information.
  *
- * **1:many semantics** live in `route_networks.txt` — one row per
- * (network_id, route_id) so consumers see the n:m mapping natively.
- * Comma-separated labels in `route_desc` are the consumer-side
- * fallback for tools that don't read networks.txt.
+ * **1:many semantics** live in `route_desc` (the comma-joined tag
+ * label list). `route_networks.txt` is 1:1 by `route_id` per the
+ * public GTFS spec.
  *
  * @param {{
  *   routes: Array<Pick<RouteRow, 'route_id' | 'route_short_name' | 'route_long_name' | 'route_desc'>>,
@@ -551,18 +693,23 @@ function isStaleLongNameVariant(cleanedDesc, cleanedLong, routeStopNames) {
  * }} input
  * @returns {{
  *   classifiedCount: number,
- *   multiNetworkCount: number,
+ *   multiTagCount: number,
+ *   networkCounts: Record<'school' | 'normal', number>,
  *   longNameCleanedCount: number,
  *   longNameDerivedCount: number,
  *   longNameUnresolvedCount: number,
  *   descCleanedCount: number,
  *   descFromCleanedCount: number,
  *   descFromStrippedCount: number,
+ *   routeNetworks: Map<string, { id: string, label: string }>,
+ *   routeTags: Map<string, Array<{ id: string, label: string, priority: number }>>,
  * }}
  */
 export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, stopsByStopId, warnings }) {
   let classifiedCount = 0;
-  let multiNetworkCount = 0;
+  let multiTagCount = 0;
+  let networkSchoolCount = 0;
+  let networkNormalCount = 0;
   let longNameCleanedCount = 0;
   let longNameDerivedCount = 0;
   let longNameUnresolvedCount = 0;
@@ -571,11 +718,27 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
   let preservedButSuspiciousCount = 0;
   let descFromStrippedCount = 0;
 
+  /** @type {Map<string, { id: string, label: string }>} */
+  const routeNetworks = new Map();
+  /** @type {Map<string, Array<{ id: string, label: string, priority: number }>>} */
+  const routeTags = new Map();
+
   for (const row of routes) {
-    // 1. Classify against the ORIGINAL row (pre-cleanup).
-    const categories = classifyRoute(row);
-    if (categories.length > 0) classifiedCount++;
-    if (categories.length > 1) multiNetworkCount++;
+    // 1. Classify tags + network against the ORIGINAL row
+    //    (pre-cleanup). The tag surface is what drives `route_desc`;
+    //    the network surface is what drives `route_networks.txt`.
+    const tags = classifyRoute(row);
+    const network = classifyNetwork(row);
+
+    if (tags.length > 0) classifiedCount++;
+    if (tags.length > 1) multiTagCount++;
+    if (network.id === 'school') networkSchoolCount++;
+    else if (network.id === 'normal') networkNormalCount++;
+
+    routeNetworks.set(row.route_id, network);
+    if (tags.length > 0) {
+      routeTags.set(row.route_id, tags.map((t, i) => ({ ...t, priority: i })));
+    }
 
     // 2. Cleanup long_name (capturing stripped parenthetical content).
     const originalLongName = row.route_long_name ?? '';
@@ -591,7 +754,7 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
     const strippedDesc = descResult.stripped;
     if (cleanedDesc !== originalDesc) descCleanedCount++;
 
-    // 4. route_long_name fallback chain: long_name → cleaned desc → stops.
+    // 4. route_long_name fallback chain: long_name -> cleaned desc -> stops.
     let resolvedLong = cleanedLong;
     if (!resolvedLong && cleanedDesc) {
       resolvedLong = cleanedDesc;
@@ -615,22 +778,24 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
 
     // 5. route_desc strategy.
     //
-    // Build a unified pool of "useful" parenthetical content — captured
-    // from long_name and/or desc cleanup, title-cased, with anything that
-    // matches a category label filtered out (so we don't redundantly
-    // surface "Untold" when the route is already classified as festival).
+    // Build a unified pool of "useful" parenthetical content -- captured
+    // from long_name and/or desc cleanup, title-cased, with anything
+    // that matches a tag label filtered out (so we don't redundantly
+    // surface "Untold" when the route is already tagged as festival).
     // Dedupe since the same parenthetical often appears in both fields.
     //
     // This pool feeds BOTH branches below:
-    //   - Categorized: appended to category labels via " | " (e.g. TE
-    //     routes whose desc ends in "(Floresti)" → "Transport Elevi |
-    //     Floresti", so riders see which commune the school bus serves).
-    //   - Un-categorized: appended to cleaned desc when both contribute
+    //   - Tagged: appended to tag labels via " | " (e.g. M26U
+    //     routes whose desc ends in "(Floresti)" -> "Metropolitan,
+    //     Untold | Floresti", so riders see which commune the route
+    //     serves).
+    //   - Un-tagged: appended to cleaned desc when both contribute
     //     unique info, or used as the desc when cleanedDesc mirrors
     //     cleanedLong (the 88A case).
+    const labelSetLower = tagLabelSetLower();
     const usefulStripped = [...strippedLong, ...strippedDesc]
       .filter((s) => s.length > 0)
-      .filter((s) => !CATEGORIES.some((c) => c.label.toLowerCase() === s.toLowerCase()))
+      .filter((s) => !labelSetLower.has(s.toLowerCase()))
       .map(titleCaseAnnotation);
 
     const seen = new Set();
@@ -640,11 +805,18 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
       return true;
     });
 
-    if (categories.length > 0) {
-      // Categorized. Base = comma-joined category labels (the primary
-      // signal for tools that don't read networks.txt). Append captured
-      // parenthetical content when it provides non-redundant info.
-      const base = categories.map((c) => c.label).join(', ');
+    // "Don't override good data" -- the original "preserve good data"
+    // desc strategy takes priority. The new-model classification is
+    // an ADDITIVE surface -- it only fills in route_desc when the
+    // original strategy produced an empty string. The empty-desc
+    // fallback (below) handles the "route has a classification but
+    // no good desc to surface" case (TE1, ELEVI-99, ...).
+    if (tags.length > 0) {
+      // Tagged. Base = comma-joined tag labels (CATEGORIES order).
+      // Append captured parenthetical content when it provides
+      // non-redundant info. School is not a tag, so a school-route
+      // with no tag falls through to the un-tagged branch below.
+      const base = tags.map((t) => t.label).join(', ');
       if (dedupedStripped.length > 0) {
         row.route_desc = `${base} | ${dedupedStripped.join(', ')}`;
         descFromStrippedCount++;
@@ -652,21 +824,21 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
         row.route_desc = base;
       }
     } else {
-      // Un-categorized. Build desc from three sources, in priority order:
+      // Un-tagged. Build desc from three sources, in priority order:
       //
-      //   a) Stripped parenthetical content (title-cased) — the "exact
+      //   a) Stripped parenthetical content (title-cased) -- the "exact
       //      mirror" Marius wants. When the long_name had "(traseu M21)"
       //      appended and Tranzy duplicated the same content in desc,
       //      after cleanup both fields have the same "Start - End"
       //      text. The parenthetical content is the only signal that's
       //      NOT in long_name, so it goes to desc.
       //
-      //   b) Cleaned desc — if Tranzy's desc had unique info beyond
+      //   b) Cleaned desc -- if Tranzy's desc had unique info beyond
       //      what was in long_name (e.g. D51's "P-ta Mihai Viteazu -
       //      Gilau"), use it. Combined with stripped content via " | "
       //      when both contribute unique info.
       //
-      //   c) Fallback mirror — when neither (a) nor (b) has unique
+      //   c) Fallback mirror -- when neither (a) nor (b) has unique
       //      info, desc = cleanedDesc (which equals cleanedLongName).
       //      Mostly cosmetic; preserves the "desc is a mirror of
       //      long_name" behavior for routes where Tranzy duplicated
@@ -674,7 +846,7 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
       // Structural check: get the route's actual stop names so the stale
       // variant detector can verify the desc's terminal actually
       // appears on this route's pattern (not just "trustable enough"
-      // via format matching). Cheaper than it looks — getRouteStopNames
+      // via format matching). Cheaper than it looks -- getRouteStopNames
       // picks the longest trip and returns its stop_name set.
       const routeStopNames = getRouteStopNames({
         routeId: row.route_id,
@@ -697,20 +869,15 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
         }
       } else if (dedupedStripped.length > 0) {
         // cleaned desc is just a mirror of long_name (or a stale
-        // long_name variant) — surface the parenthetical content as
+        // long_name variant) -- surface the parenthetical content as
         // the unique signal.
         row.route_desc = dedupedStripped.join(', ');
         descFromStrippedCount++;
       } else {
         // cleaned desc mirrors long_name and there's no parenthetical
-        // content to surface — leave route_desc empty. Marius's
-        // PR feedback: a desc that's just a copy of long_name is
-        // noise for the consumer (neary, OTP, Google Maps), not info.
-        // This also covers stale long_name variants (Tranzy's desc
-        // carries a different terminal pair than long_name — e.g.
-        // route 23's "P-ta M. Viteazul - EMERSON" vs long_name
-        // "P-ta M. Viteazul - C.U.G"; without the stale-variant check
-        // we'd surface the contradictory terminal to consumers).
+        // content to surface -- leave route_desc empty. The empty-
+        // desc fallback (below) handles the "route has a
+        // classification but no good desc" case.
         row.route_desc = '';
       }
 
@@ -722,7 +889,7 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
       // log without losing the data.
       //
       // Match threshold for "doesn't match longLast" is exact equality
-      // (after normalization), NOT fuzzy — otherwise "P-ta Garii" vs
+      // (after normalization), NOT fuzzy -- otherwise "P-ta Garii" vs
       // "P-ta Garii Noi" would be treated as matching (shared "garii")
       // and we'd silently swallow the "Noi" qualifier mismatch.
       if (cleanedDesc && cleanedDesc !== cleanedLong && routeStopNames) {
@@ -760,6 +927,30 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
         }
       }
     }
+
+    // Empty-desc fallback. If the original desc strategy above left
+    // route_desc empty AND the route has a meaningful classification
+    // (school network, or any tag), fill it with the labels list
+    // (network + tag labels), omitting "Normal".
+    //
+    // Why this exists: a school-route like TE1 has tags=[] and no
+    // cleaned desc / parenthetical to surface. The school designation
+    // is in route_networks.txt (the structured join), but the human-
+    // readable route_desc would otherwise be empty -- losing the
+    // operator-identity signal. The fallback restores it.
+    //
+    // Why "omit Normal": the normal network is the catch-all for
+    // un-classified routes. Surfacing "Normal" on every regular urban
+    // route's route_desc would be noise without information (regular
+    // urban routes are most of the feed). The fallback only fires
+    // for routes with a real classification -- school, or any tag.
+    if (!row.route_desc) {
+      const labels = [network.label, ...tags.map((t) => t.label)];
+      const filtered = labels.filter((l) => l !== 'Normal');
+      if (filtered.length > 0) {
+        row.route_desc = filtered.join(', ');
+      }
+    }
   }
 
 // Build-log INFO summary. Per-row detail is in routes.txt + networks.txt;
@@ -776,34 +967,67 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
       warnings.push({
         severity: 'info',
         message:
-          `routes: classified ${classifiedCount} route(s), ${multiNetworkCount} with multiple networks, ` +
+          `routes: tagged ${classifiedCount} route(s) (${multiTagCount} with multiple tags), ` +
+          `networked ${networkSchoolCount} school + ${networkNormalCount} normal, ` +
           `cleaned ${longNameCleanedCount} long_name + ${descCleanedCount} desc, ` +
           `derived ${longNameDerivedCount} long_name(s) (desc or stops fallback)` +
           (longNameUnresolvedCount > 0 ? `, ${longNameUnresolvedCount} unresolved` : '') +
-          `, surfaced ${descFromCleanedCount} cleaned desc + ${descFromStrippedCount} parenthetical(s) (both categorized + un-categorized)` +
+          `, surfaced ${descFromCleanedCount} cleaned desc + ${descFromStrippedCount} parenthetical(s) (both tagged + un-tagged)` +
           (preservedButSuspiciousCount > 0
-            ? `, ${preservedButSuspiciousCount} preserved-but-suspicious desc(s) — operator review recommended`
+            ? `, ${preservedButSuspiciousCount} preserved-but-suspicious desc(s) -- operator review recommended`
             : '') +
-          ' — see networks.txt + route_networks.txt',
+          ' -- see networks.txt + route_networks.txt',
       });
     }
 
   return {
     classifiedCount,
-    multiNetworkCount,
+    multiTagCount,
+    networkCounts: { school: networkSchoolCount, normal: networkNormalCount },
     longNameCleanedCount,
     longNameDerivedCount,
     longNameUnresolvedCount,
     descCleanedCount,
     descFromCleanedCount,
     descFromStrippedCount,
+    routeNetworks,
+    routeTags,
   };
 }
 
 /**
- * Get the canonical category list — for `networks.txt` emission in the
- * `emit/networks.js` module.
+ * Get the canonical tag list -- used by consumers that need to know
+ * which tag ids exist for the cluj adapter. For networks, use
+ * `getAllNetworks` instead.
+ *
+ * @returns {Array<{ id: string, label: string, surface: 'tag' }>}
+ */
+export function getAllTags() {
+  return TAG_ENTRIES.map(({ id, label }) => ({ id, label, surface: 'tag' }));
+}
+
+/**
+ * Get the canonical network list -- for `networks.txt` emission in
+ * the `emit/networks.js` module. The list is in declaration order,
+ * which is the order `networks.txt` will emit rows in.
+ *
+ * @returns {Array<{ id: string, label: string, surface: 'network' }>}
+ */
+export function getAllNetworks() {
+  return NETWORK_ENTRIES.map(({ id, label }) => ({ id, label, surface: 'network' }));
+}
+
+/**
+ * Back-compat shim: returns the full CATEGORIES list (tags + networks).
+ * Prefer `getAllTags` or `getAllNetworks` for the specific surface.
+ *
+ * Kept because earlier code paths in this file and downstream modules
+ * imported `getAllCategories`; renaming would have churned the test
+ * suite. The semantics are unchanged: returns every entry in
+ * CATEGORIES declaration order with id + label.
+ *
+ * @returns {Array<{ id: string, label: string, surface: 'tag' | 'network' }>}
  */
 export function getAllCategories() {
-  return CATEGORIES.map(({ id, label }) => ({ id, label }));
+  return CATEGORIES.map(({ id, label, surface }) => ({ id, label, surface }));
 }

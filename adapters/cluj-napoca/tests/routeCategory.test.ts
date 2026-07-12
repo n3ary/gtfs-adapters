@@ -4,60 +4,107 @@ import { describe, it, expect } from 'vitest';
 import {
   CATEGORIES,
   classifyRoute,
+  classifyNetwork,
   cleanLongName,
   cleanDesc,
   deriveLongNameFromStops,
   applyRouteCategory,
   getAllCategories,
+  getAllTags,
+  getAllNetworks,
 } from '../src/assemble/merge/routeCategory.ts';
 
-describe('classifyRoute — pattern → category', () => {
-  // classifyRoute returns an array (1:many) — empty for regular urban.
+describe('classifyRoute -- tag-surface pattern -> category', () => {
+  // classifyRoute returns tag matches only (not networks). School is
+  // a network under the new model (gtfs-adapters#26), not a tag, so
+  // school-classified routes return [] for tags.
 
-  it('classifies TE-prefixed school buses as "Transport Elevi"', () => {
-    expect(classifyRoute({ route_short_name: 'TE1', route_long_name: 'Transport Elevi Manastur' }))
-      .toEqual([{ id: 'school', label: 'Transport Elevi' }]);
-    expect(classifyRoute({ route_short_name: 'TE14' })).toEqual([{ id: 'school', label: 'Transport Elevi' }]);
-    expect(classifyRoute({ route_short_name: 'TE-OG' })).toEqual([{ id: 'school', label: 'Transport Elevi' }]);
+  it('classifies TE-prefixed school buses as school network (no tag match)', () => {
+    // School is a network, not a tag. TE* short_name matches the
+    // school network; classifyRoute returns no tags. The school
+    // designation lives in route_networks.txt + (via the empty-desc
+    // fallback) route_desc.
+    expect(classifyRoute({ route_short_name: 'TE1', route_long_name: 'Transport Elevi Manastur' })).toEqual([]);
+    expect(classifyNetwork({ route_short_name: 'TE1', route_long_name: 'Transport Elevi Manastur' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyRoute({ route_short_name: 'TE14' })).toEqual([]);
+    expect(classifyNetwork({ route_short_name: 'TE14' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyRoute({ route_short_name: 'TE-OG' })).toEqual([]);
+    expect(classifyNetwork({ route_short_name: 'TE-OG' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
   });
 
-  it('classifies M7x routes as BOTH school + metroline (TE prefix in long_name)', () => {
-    // The M7x school-bus family carries the school designation as
-    // long_name (`TE2 Floresti ...`, `TE1F`) while Tranzy catalogs them
-    // with the M* metroline prefix. Both signals are real — they're
-    // Floresti metroline services that also serve school destinations
-    // (Liceul Dumitru Tautan, Cetatea Fetei, etc.). The TE-prefix
-    // check on long_name catches the school signal that the M* prefix
-    // check alone would miss.
-    expect(classifyRoute({
+  it('classifies M7x routes as school network + metroline tag (broad school match)', () => {
+    // The M7x school-bus family has "TE\d+ Floresti" in long_name.
+    // Under the broad school match, this counts as school network.
+    // M* short_name is metroline tag. So M7x routes are 1 network
+    // (school) + 1 tag (metroline).
+    const r1 = classifyRoute({
       route_short_name: 'M76A',
       route_long_name: 'TE2 Floresti str. Somesului',
-    })).toEqual([
-      { id: 'school', label: 'Transport Elevi' },
-      { id: 'metroline', label: 'Metropolitan' },
-    ]);
-    expect(classifyRoute({
+    });
+    expect(r1).toEqual([{ id: 'metroline', label: 'Metropolitan' }]);
+    expect(classifyNetwork({
+      route_short_name: 'M76A',
+      route_long_name: 'TE2 Floresti str. Somesului',
+    })).toEqual({ id: 'school', label: 'Transport Elevi' });
+
+    const r2 = classifyRoute({
       route_short_name: 'M75B',
       route_long_name: 'TE1F',
-    })).toEqual([
-      { id: 'school', label: 'Transport Elevi' },
-      { id: 'metroline', label: 'Metropolitan' },
-    ]);
+    });
+    expect(r2).toEqual([{ id: 'metroline', label: 'Metropolitan' }]);
+    expect(classifyNetwork({
+      route_short_name: 'M75B',
+      route_long_name: 'TE1F',
+    })).toEqual({ id: 'school', label: 'Transport Elevi' });
   });
 
-  it('catches "Elevi" substring case-insensitively across all 3 fields', () => {
+  it('catches "Elevi" substring case-insensitively across all 3 fields (broad school match)', () => {
+    // School is a network, not a tag. The broad school match catches
+    // "elevi" in any of the three fields. classifyRoute returns tags
+    // only -- the school network is verified via classifyNetwork.
     expect(classifyRoute({ route_short_name: 'X1', route_long_name: 'Some elevi variant' }))
-      .toEqual([{ id: 'school', label: 'Transport Elevi' }]);
+      .toEqual([]);
+    expect(classifyNetwork({ route_short_name: 'X1', route_long_name: 'Some elevi variant' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
+
     expect(classifyRoute({ route_short_name: 'X2', route_long_name: '', route_desc: 'Elevi route' }))
-      .toEqual([{ id: 'school', label: 'Transport Elevi' }]);
+      .toEqual([]);
+    expect(classifyNetwork({ route_short_name: 'X2', route_long_name: '', route_desc: 'Elevi route' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
+
     expect(classifyRoute({ route_short_name: 'ELEVI-99', route_long_name: '' }))
-      .toEqual([{ id: 'school', label: 'Transport Elevi' }]);
+      .toEqual([]);
+    expect(classifyNetwork({ route_short_name: 'ELEVI-99', route_long_name: '' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
+  });
+
+  it('classifies X1 (elevi in long_name + untold in desc) as school + festival (1 network + 1 tag)', () => {
+    // The synthetic 1:many case from the original test. Long_name
+    // has "Transport Elevi" (catches school network via the elevi
+    // substring). Desc has "Untold" (catches festival tag). Result:
+    // school network + festival tag.
+    const result = classifyRoute({
+      route_short_name: 'X1',
+      route_long_name: 'Str. X - Liceul Y (Transport Elevi)',
+      route_desc: 'Untold',
+    });
+    // Only festival is a tag; school is a network.
+    expect(result).toEqual([{ id: 'festival', label: 'Untold' }]);
+    // School is a network classification.
+    expect(classifyNetwork({
+      route_short_name: 'X1',
+      route_long_name: 'Str. X - Liceul Y (Transport Elevi)',
+      route_desc: 'Untold',
+    })).toEqual({ id: 'school', label: 'Transport Elevi' });
   });
 
   it('classifies *U suffix + "(untold)" annotation as "Untold"', () => {
     expect(classifyRoute({ route_short_name: '30U', route_long_name: 'Grigorescu - IRA' }))
       .toEqual([{ id: 'festival', label: 'Untold' }]);
-    // M26U is also metroline (M* prefix) → 1:many.
+    // M26U is also metroline (M* prefix) -> 1:many.
     expect(classifyRoute({
       route_short_name: 'M26U',
       route_long_name: 'Uzinei Electrice - Floresti / Cetate (untold)',
@@ -108,55 +155,113 @@ describe('classifyRoute — pattern → category', () => {
       .toEqual([{ id: 'special', label: 'Cursa Speciala' }]);
   });
 
-  it('returns 1:many for routes that match multiple categories (M76A = school + metroline)', () => {
-    // New 1:many signature case: a route whose long_name AND route_desc
-    // both carry category signals. e.g. route_id='X' has long_name with
-    // "Transport Elevi" + short_name "M26" with "untold" in route_desc.
-    // Use a synthetic shape that exercises the comma-join without the
-    // M7x-specific M76A case (see the dedicated M7x test for that
-    // route's reduced-to-metroline classification).
+  it('returns 1:many tag list for routes that match multiple tags (festival + metroline)', () => {
+    // The canonical 1:many tag case: M26U-like routes. school is a
+    // network (not a tag), so the 1:many here is purely on the tag
+    // surface. M26U is in the normal network (no TE prefix anywhere).
     const result = classifyRoute({
-      route_short_name: 'X1',
-      route_long_name: 'Str. X - Liceul Y (Transport Elevi)',
+      route_short_name: 'M26U',
+      route_long_name: 'Uzinei Electrice - Floresti / Cetate (untold)',
       route_desc: 'Untold',
     });
     expect(result).toEqual([
-      { id: 'school', label: 'Transport Elevi' },
       { id: 'festival', label: 'Untold' },
+      { id: 'metroline', label: 'Metropolitan' },
     ]);
   });
 
-  it('returns empty array for regular urban routes that match no category', () => {
+  it('returns empty array for regular urban routes that match no tag AND no school network', () => {
+    // Regular urban: no tag, no school network match. classifyRoute
+    // returns []. classifyNetwork returns normal.
     expect(classifyRoute({ route_short_name: '1', route_long_name: 'Str. Bucium - P-ta 1 Mai' }))
       .toEqual([]);
+    expect(classifyNetwork({ route_short_name: '1', route_long_name: 'Str. Bucium - P-ta 1 Mai' }))
+      .toEqual({ id: 'normal', label: 'Normal' });
     expect(classifyRoute({ route_short_name: '24', route_long_name: 'Str. Unirii - Str. Bucium' }))
       .toEqual([]);
     expect(classifyRoute({ route_short_name: '101', route_long_name: 'Tram line 101' }))
       .toEqual([]);
   });
 
-  it('respects priority order (matches in CATEGORIES order)', () => {
-    // 1:many results preserve CATEGORIES declaration order.
-    expect(CATEGORIES.map((c) => c.id)).toEqual([
-      'special', 'school', 'festival', 'night', 'airport', 'metroline',
-    ]);
-    // For a school + festival 1:many case, school comes first because
-    // it's declared earlier in CATEGORIES.
+  it('respects priority order (matches in CATEGORIES tag order)', () => {
+    // 1:many results preserve CATEGORIES declaration order (filtered
+    // to tag-surface entries). `special` is declared first, then
+    // (school -- excluded, network), `festival`, `night`, `airport`,
+    // `metroline`. `normal` is at the end (also excluded, network).
+    const tagIds = CATEGORIES.filter((c) => c.surface === 'tag').map((c) => c.id);
+    expect(tagIds).toEqual(['special', 'festival', 'night', 'airport', 'metroline']);
+    // For a festival + metroline 1:many case, festival comes first
+    // because it's declared earlier than metroline in CATEGORIES.
     const result = classifyRoute({
-      route_short_name: 'X1',
-      route_long_name: 'Str. X - Liceul Y (Transport Elevi)',
-      route_desc: 'Untold',
+      route_short_name: 'M26U',
+      route_long_name: 'Floresti / Cetate (untold)',
     });
-    expect(result.map((c) => c.id)).toEqual(['school', 'festival']);
+    expect(result.map((c) => c.id)).toEqual(['festival', 'metroline']);
   });
 
   it('treats missing/undefined fields as empty strings', () => {
     expect(() => classifyRoute({})).not.toThrow();
     expect(classifyRoute({})).toEqual([]);
+    expect(classifyNetwork({})).toEqual({ id: 'normal', label: 'Normal' });
   });
 });
 
-describe('cleanLongName — start-end format', () => {
+describe('classifyNetwork -- 1:1 network assignment', () => {
+  // Per gtfs-adapters#26: every route belongs to exactly one of two
+  // networks -- `school` (broad match: TE* s/l, elevi s/l/d) or
+  // `normal` (the fallback for everything else). The 1:1 constraint
+  // of the public GTFS spec is satisfied by construction.
+
+  it('assigns school network to TE* short_name routes', () => {
+    expect(classifyNetwork({ route_short_name: 'TE1' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyNetwork({ route_short_name: 'TE14', route_long_name: 'whatever' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyNetwork({ route_short_name: 'TE-OG' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
+  });
+
+  it('assigns school network to M7x family (TE* in long_name)', () => {
+    // The M7x family has "TE\d+ Floresti" in long_name. With the
+    // broad school match, they're school-network routes.
+    expect(classifyNetwork({ route_short_name: 'M76A', route_long_name: 'TE2 Floresti str. Somesului' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyNetwork({ route_short_name: 'M75B', route_long_name: 'TE1F' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
+  });
+
+  it('assigns school network via the elevi substring defensive catch', () => {
+    // "elevi" in any of the 3 fields is a school-network hit.
+    expect(classifyNetwork({ route_short_name: 'X1', route_long_name: 'Some elevi variant' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyNetwork({ route_short_name: 'X2', route_long_name: '', route_desc: 'Elevi route' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyNetwork({ route_short_name: 'ELEVI-99', route_long_name: '' }))
+      .toEqual({ id: 'school', label: 'Transport Elevi' });
+  });
+
+  it('assigns normal network to routes with no school signal', () => {
+    expect(classifyNetwork({ route_short_name: '1' }))
+      .toEqual({ id: 'normal', label: 'Normal' });
+    expect(classifyNetwork({ route_short_name: 'CS' }))
+      .toEqual({ id: 'normal', label: 'Normal' });
+    expect(classifyNetwork({ route_short_name: '25N' }))
+      .toEqual({ id: 'normal', label: 'Normal' });
+    expect(classifyNetwork({ route_short_name: 'A1' }))
+      .toEqual({ id: 'normal', label: 'Normal' });
+    // M26 (no TE prefix, no elevi) is normal network.
+    expect(classifyNetwork({ route_short_name: 'M26', route_long_name: 'Gara - Selimbar' }))
+      .toEqual({ id: 'normal', label: 'Normal' });
+  });
+
+  it('treats missing/undefined fields as empty strings (falls back to normal)', () => {
+    expect(classifyNetwork({})).toEqual({ id: 'normal', label: 'Normal' });
+    expect(classifyNetwork({ route_short_name: undefined, route_long_name: 'foo' }))
+      .toEqual({ id: 'normal', label: 'Normal' });
+  });
+});
+
+describe('cleanLongName -- start-end format', () => {
   it('strips trailing parenthetical annotations', () => {
     expect(cleanLongName({ route_short_name: 'M26U', route_long_name: 'Uzinei Electrice - Floresti / Cetate (untold)' }))
       .toBe('Uzinei Electrice - Floresti / Cetate');
@@ -176,6 +281,9 @@ describe('cleanLongName — start-end format', () => {
   });
 
   it('strips "TE\\d+ Floresti" prefix from M7x school routes', () => {
+    // Kept even though those routes are now in the school network
+    // (broad match). The cleanup pass still strips the Tranzy noise
+    // from long_name for readability.
     expect(cleanLongName({ route_short_name: 'M76A', route_long_name: 'TE2 Floresti str. Somesului' }))
       .toBe('str. Somesului');
     expect(cleanLongName({ route_short_name: 'M79A', route_long_name: 'TE5 Floresti Tauti Floresti' }))
@@ -204,8 +312,8 @@ describe('cleanLongName — start-end format', () => {
   });
 });
 
-describe('deriveLongNameFromStops — fallback when cleanup leaves long_name empty', () => {
-  // Minimal shape — only fields actually used.
+describe('deriveLongNameFromStops -- fallback when cleanup leaves long_name empty', () => {
+  // Minimal shape -- only fields actually used.
   const stopsByStopId = new Map([
     ['A', { stop_name: 'Piata Garii' }],
     ['B', { stop_name: 'Sala Sporturilor' }],
@@ -217,10 +325,8 @@ describe('deriveLongNameFromStops — fallback when cleanup leaves long_name emp
 
   it('returns "<first> - <last>" from the longest trip of the route', () => {
     const allStopTimeRows = [
-      // Short trip (2 stops) for route 35
       { trip_id: 'short', stop_id: 'A', stop_sequence: 0 },
       { trip_id: 'short', stop_id: 'B', stop_sequence: 1 },
-      // Long trip (3 stops) — should win
       { trip_id: 'long', stop_id: 'A', stop_sequence: 0 },
       { trip_id: 'long', stop_id: 'B', stop_sequence: 1 },
       { trip_id: 'long', stop_id: 'C', stop_sequence: 2 },
@@ -251,7 +357,6 @@ describe('deriveLongNameFromStops — fallback when cleanup leaves long_name emp
   });
 
   it('returns "" for circular services (first stop == last stop)', () => {
-    // Pin against emitting "X - X" which would mislead users.
     const allStopTimeRows = [
       { trip_id: 't1', stop_id: 'Z', stop_sequence: 0 },
       { trip_id: 't1', stop_id: 'Z', stop_sequence: 1 },
@@ -277,7 +382,7 @@ describe('deriveLongNameFromStops — fallback when cleanup leaves long_name emp
   });
 });
 
-describe('cleanDesc — symmetric cleanup with cleanLongName', () => {
+describe('cleanDesc -- symmetric cleanup with cleanLongName', () => {
   it('strips the same parentheticals cleanLongName does', () => {
     expect(cleanDesc({ route_short_name: '88A', route_desc: 'Floresti Cetate - Emerson (traseu M21)' }))
       .toBe('Floresti Cetate - Emerson');
@@ -300,16 +405,15 @@ describe('cleanDesc — symmetric cleanup with cleanLongName', () => {
   });
 
   it('preserves clean descs unchanged (D51-style useful endpoint info)', () => {
-    // D51's desc from Tranzy is " P-ta Mihai Viteazu - Gilau" — already
-    // clean (no parentheticals, no Transport Elevi prefix, no TE-? noise).
-    // The cleanup pass leaves it intact so the orchestrator can use it
-    // as route_desc when no category matches.
+    // D51's desc from Tranzy is " P-ta Mihai Viteazu - Gilau" -- already
+    // clean. The cleanup pass leaves it intact so the orchestrator
+    // can use it as route_desc when no classification overwrites it.
     expect(cleanDesc({ route_short_name: 'D51', route_desc: ' P-ta Mihai Viteazu - Gilau' }))
       .toBe('P-ta Mihai Viteazu - Gilau');
   });
 });
 
-describe('applyRouteCategory — orchestrator entry point', () => {
+describe('applyRouteCategory -- orchestrator entry point', () => {
   const stopsByStopId = new Map([
     ['A', { stop_name: 'Piata Garii' }],
     ['B', { stop_name: 'Sala Sporturilor' }],
@@ -328,39 +432,51 @@ describe('applyRouteCategory — orchestrator entry point', () => {
     const routes = [
       { route_id: '93', route_short_name: 'TE1', route_long_name: 'Transport Elevi Manastur', route_desc: '' },
       { route_id: '1',  route_short_name: '1',  route_long_name: 'Str. Bucium - P-ta 1 Mai',   route_desc: '' },
-      // Route with empty long_name (e.g. Tranzy never published one).
-      // Should fall back to stop_times.
       { route_id: '99', route_short_name: '99', route_long_name: '', route_desc: '' },
     ];
     return { routes, allStopTimeRows, tripToRoute };
   }
 
-  it('cleans long_name, classifies (1:many), and mutates route_desc with comma-separated labels', () => {
+  it('classifies long_name + network + route_desc per the new model (gtfs-adapters#26)', () => {
+    // TE1: school network (TE* short_name). No tag. The original
+    // desc strategy produces an empty desc. The empty-desc fallback
+    // fills it with "Transport Elevi" (school label, since "Normal"
+    // is omitted).
+    // Route 1: normal network. No tag, no useful desc. Empty desc.
+    //   (The "Normal" label is omitted in the fallback -- regular
+    //    urban routes get an empty desc to avoid noise.)
+    // Route 99: normal network. No tag, no cleaned desc (uses stops
+    //   fallback for long_name). route_desc empty.
     const { routes, allStopTimeRows, tripToRoute } = setup();
     const warnings = [];
     const result = applyRouteCategory({
       routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings,
     });
-    expect(result.classifiedCount).toBe(1); // TE1 only
-    expect(result.multiNetworkCount).toBe(0);
+    expect(result.classifiedCount).toBe(0); // no route is tagged
+    expect(result.multiTagCount).toBe(0);
+    expect(result.networkCounts.school).toBe(1); // TE1
+    expect(result.networkCounts.normal).toBe(2); // 1 and 99
     expect(routes[0].route_long_name).toBe('Manastur');
+    // TE1: school network, no tag, no useful desc. Empty-desc
+    // fallback fills with "Transport Elevi" (omitting "Normal").
     expect(routes[0].route_desc).toBe('Transport Elevi');
     expect(routes[1].route_long_name).toBe('Str. Bucium - P-ta 1 Mai');
-    expect(routes[1].route_desc).toBe(''); // regular urban
+    // Regular urban: empty desc. "Normal" omitted from the fallback.
+    expect(routes[1].route_desc).toBe('');
+    // routeNetworks map: 1:1 by route_id, every route assigned.
+    expect(result.routeNetworks.get('93')).toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(result.routeNetworks.get('1')).toEqual({ id: 'normal', label: 'Normal' });
+    expect(result.routeNetworks.get('99')).toEqual({ id: 'normal', label: 'Normal' });
+    // routeTags map: empty (no route is tagged in this fixture).
+    expect(result.routeTags.size).toBe(0);
   });
 
-  it('classifies BEFORE cleanup so a 1:many case survives the cleanup pass', () => {
-    // Regression test for the order-change. If classification ran AFTER
-    // cleanup, signals embedded in long_name (e.g. "Transport Elevi" or
-    // a parenthetical) would be stripped before classification could
-    // match them. The 1:many route here exercises a long_name signal
-    // ("Transport Elevi" inside parens) plus a short_name signal (M*
-    // prefix for metroline) — both must survive.
-    //
-    // Note: M76A itself (the original 1:many case) is no longer 1:many
-    // because we dropped the M7x short_name regex from the school pattern.
-    // This test uses a synthetic shape that still produces 1:many via the
-    // long_name "elevi" check + short_name M* check.
+  it('handles 1:many tag cases via route_desc comma-join (festival + metroline)', () => {
+    // The canonical 1:many tag case: short_name M26U (M* prefix ->
+    // metroline), long_name with "untold" (festival). route_desc
+    // is the comma-joined tag labels -- no school label, since
+    // school isn't a tag. (M26U is in the normal network; "M*"
+    // short_name doesn't match the school pattern.)
     const allStopTimeRows = [
       { trip_id: 't-145', stop_id: 'A', stop_sequence: 0 },
       { trip_id: 't-145', stop_id: 'B', stop_sequence: 1 },
@@ -369,8 +485,8 @@ describe('applyRouteCategory — orchestrator entry point', () => {
     const routes = [
       {
         route_id: '145',
-        route_short_name: 'M99',
-        route_long_name: 'Some Endpoint - Liceul X (Transport Elevi)',
+        route_short_name: 'M26U',
+        route_long_name: 'Some Endpoint - Liceul X (untold)',
         route_desc: '',
       },
     ];
@@ -378,16 +494,16 @@ describe('applyRouteCategory — orchestrator entry point', () => {
     const result = applyRouteCategory({
       routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings,
     });
-    expect(result.classifiedCount).toBe(1); // 1 route
-    expect(result.multiNetworkCount).toBe(1); // with 2 networks
-    // route_desc is comma-separated in CATEGORIES order: school first,
-    // metroline second.
-    expect(routes[0].route_desc).toBe('Transport Elevi, Metropolitan');
+    expect(result.classifiedCount).toBe(1); // 1 route tagged
+    expect(result.multiTagCount).toBe(1); // with 2 tags
+    expect(result.networkCounts.normal).toBe(1); // M26U is normal (no TE)
+    // route_desc is comma-separated in CATEGORIES order: festival
+    // first, metroline second. School is NOT in the comma-join
+    // (school is a network, not a tag).
+    expect(routes[0].route_desc).toBe('Untold, Metropolitan');
   });
 
   it('falls back to stop_times when long_name is empty after cleanup', () => {
-    // Build a fresh scenario where route 99 has empty long_name AND
-    // matching stop_times available.
     const allStopTimeRows = [
       { trip_id: 't-99', stop_id: 'A', stop_sequence: 0 },
       { trip_id: 't-99', stop_id: 'B', stop_sequence: 1 },
@@ -436,40 +552,41 @@ describe('applyRouteCategory — orchestrator entry point', () => {
     expect(routes[0].route_long_name).toBe('');
   });
 
-  it('emits an INFO warning summarizing classified / cleaned / derived / multi-network counts', () => {
+  it('emits an INFO warning summarizing tagged / cleaned / derived counts + network counts', () => {
+    // Fixture: TE1 (school network, no tag) + route 1 (normal, no tag).
+    // Neither is tagged, so classifiedCount = 0, but the network
+    // counts and the long_name/desc cleanup counts still surface
+    // in the INFO line.
     const { routes, allStopTimeRows, tripToRoute } = setup();
     const warnings = [];
     applyRouteCategory({
       routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings,
     });
-    const info = warnings.find((w) => w.severity === 'info' && w.message.includes('classified'));
+    const info = warnings.find((w) => w.severity === 'info' && w.message.startsWith('routes:'));
     expect(info).toBeDefined();
-    expect(info.message).toMatch(/classified 1 route\(s\)/);
-    expect(info.message).toMatch(/cleaned 1/);
+    expect(info.message).toMatch(/tagged 0 route/);
+    expect(info.message).toMatch(/networked 1 school \+ 2 normal/);
+    expect(info.message).toMatch(/cleaned 1 long_name/);
   });
 
-  it('emits multi-network count in INFO when 1:many cases fire', () => {
-    // Synthetic 1:many case: short_name M* (metroline) + long_name with
-    // "Transport Elevi" (school). After we dropped the M7x short_name
-    // regex, this is the canonical 1:many fixture.
+  it('emits multi-tag count in INFO when 1:many cases fire', () => {
+    // Synthetic 1:many case: short_name M* (metroline) + long_name
+    // with "untold" (festival). 1:many via tag surface, not network.
     const allStopTimeRows = [];
     const tripToRoute = new Map();
     const routes = [
-      { route_id: '145', route_short_name: 'M99', route_long_name: 'Some Endpoint - Liceul X (Transport Elevi)', route_desc: '' },
-      { route_id: '146', route_short_name: 'M98', route_long_name: 'Other Endpoint - Scoala Y (Transport Elevi)', route_desc: '' },
+      { route_id: '145', route_short_name: 'M26U', route_long_name: 'Some Endpoint - Liceul X (untold)', route_desc: '' },
+      { route_id: '146', route_short_name: 'M99U', route_long_name: 'Other Endpoint - Scoala Y (untold)', route_desc: '' },
     ];
     const warnings = [];
     applyRouteCategory({
       routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings,
     });
-    const info = warnings.find((w) => w.severity === 'info');
-    expect(info.message).toMatch(/2 with multiple networks/);
+    const info = warnings.find((w) => w.severity === 'info' && w.message.startsWith('routes:'));
+    expect(info.message).toMatch(/2 with multiple tags/);
   });
 
   it('does not emit a warning when nothing changes', () => {
-    // After the desc-preservation change, this fixture does fire an
-    // INFO warning ("preserved 1 desc on un-categorized routes"). To get
-    // the no-warning case, all the desc needs to be empty too.
     const allStopTimeRows = [{ trip_id: 't-1', stop_id: 'A', stop_sequence: 0 }];
     const tripToRoute = new Map([['t-1', '1']]);
     const routes = [
@@ -487,23 +604,25 @@ describe('applyRouteCategory — orchestrator entry point', () => {
   });
 });
 
-describe('applyRouteCategory — desc strategy', () => {
-  // Pin the new behavior: for un-categorized routes, route_desc keeps
-  // the descriptive text from Tranzy (after cleanup). For categorized
-  // routes, route_desc is overwritten with the category labels.
-  // This avoids the previous data loss for D51 / M75A / etc. where
-  // blind overwriting cleared Tranzy's endpoint info.
+describe('applyRouteCategory -- desc strategy + empty-desc fallback', () => {
+  // "Don't override good data" -- the original desc strategy takes
+  // priority. The new-model classification is an ADDITIVE surface
+  // -- it only fills in route_desc when the original strategy
+  // produced an empty string. The empty-desc fallback (omitting
+  // "Normal") handles the "route has a classification but no good
+  // desc" case (TE routes, ELEVI-99, etc.).
 
   const stopsByStopId = new Map([
     ['A', { stop_name: 'Piata Garii' }],
     ['B', { stop_name: 'Cart. Zorilor' }],
   ]);
 
-  it('preserves cleaned desc as route_desc when no category matches (D51 case)', () => {
-    // D51 is un-categorized (employee-only service, no public category
+  it('preserves cleaned desc as route_desc when no tag matches (D51 case)', () => {
+    // D51 is un-tagged (employee-only service, no public tag
     // pattern). Its Tranzy desc "P-ta Mihai Viteazu - Gilau" should
-    // survive as the route_desc so consumers see endpoint info instead
-    // of an empty string.
+    // survive as the desc portion of route_desc. The "Normal" label
+    // is omitted (D51 is normal network, but the "good data" desc
+    // wins over the empty-desc fallback).
     const routes = [
       { route_id: '190', route_short_name: 'D51', route_long_name: 'D51', route_desc: ' P-ta Mihai Viteazu - Gilau' },
     ];
@@ -511,28 +630,52 @@ describe('applyRouteCategory — desc strategy', () => {
     const result = applyRouteCategory({ routes, warnings });
     expect(result.classifiedCount).toBe(0);
     expect(result.descFromCleanedCount).toBe(1);
+    // The desc is preserved as-is -- the empty-desc fallback doesn't
+    // fire because route_desc is already non-empty.
     expect(routes[0].route_desc).toBe('P-ta Mihai Viteazu - Gilau');
   });
 
-  it('uses category labels for categorized routes (desc gets overwritten)', () => {
-    // TE1 is categorized as school. The Tranzy desc "" is empty so
-    // there's nothing to lose — but verify the category label wins
-    // even if desc had data.
+  it('TE1 (school network, no tag, no cleaned desc) gets the empty-desc fallback: "Transport Elevi"', () => {
+    // The canonical empty-desc fallback case. TE1 is in the school
+    // network, no tag, no cleaned desc, no parenthetical. The
+    // original desc strategy leaves route_desc empty. The fallback
+    // fires: labels = ["Transport Elevi"], filter "Normal" (not in
+    // list) -> ["Transport Elevi"], join -> "Transport Elevi".
     const routes = [
-      { route_id: '93', route_short_name: 'TE1', route_long_name: 'Transport Elevi Manastur', route_desc: 'Some endpoint desc' },
+      { route_id: '93', route_short_name: 'TE1', route_long_name: 'Manastur', route_desc: '' },
     ];
     const warnings = [];
-    applyRouteCategory({ routes, warnings });
+    const result = applyRouteCategory({ routes, warnings });
+    // School network, no tag.
+    expect(result.routeNetworks.get('93')).toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(result.routeTags.get('93')).toBeUndefined();
+    // Empty-desc fallback surfaces the school label.
+    expect(routes[0].route_desc).toBe('Transport Elevi');
+  });
+
+  it('ELEVI-99 (school via elevi substring) gets the empty-desc fallback: "Transport Elevi"', () => {
+    // The defensive "elevi" substring catch puts ELEVI-99 in the
+    // school network. No tag, no cleaned desc, no parenthetical --
+    // empty-desc fallback fires.
+    const routes = [
+      { route_id: 'E99', route_short_name: 'ELEVI-99', route_long_name: '', route_desc: '' },
+    ];
+    const warnings = [];
+    const result = applyRouteCategory({ routes, warnings });
+    expect(result.routeNetworks.get('E99')).toEqual({ id: 'school', label: 'Transport Elevi' });
     expect(routes[0].route_desc).toBe('Transport Elevi');
   });
 
   it('uses cleaned desc when long_name is empty but desc has data (M75A case)', () => {
-    // M75A scenario: TE1 Floresti long_name gets stripped to empty,
-    // so long_name falls back to the cleaned desc. Note: the parenthetical
-    // in this desc is mid-string (not trailing), so the cleanup regex
-    // — which only strips TRAILING parentheticals — leaves it intact.
-    // That's the intended behavior — mid-string " (Floresti)" is
-    // meaningful content, not annotation noise.
+    // M75A: M* prefix matches metroline tag. The "TE1 Floresti"
+    // long_name prefix is stripped (cleanup). route_desc is the
+    // metroline tag only -- "Metropolitan". The cleaned desc
+    // ("Avram Iancu (Floresti) - Liceul DumitruTautan") is the
+    // long_name fallback, not the desc.
+    //
+    // Under the broad school match, M75A is also in the school
+    // network (long_name starts with "TE1 Floresti" -- catches the
+    // TE* in long_name predicate). So network = school, tag = metroline.
     const routes = [
       {
         route_id: '144',
@@ -542,13 +685,19 @@ describe('applyRouteCategory — desc strategy', () => {
       },
     ];
     const warnings = [];
-    applyRouteCategory({ routes, warnings });
-    // long_name falls back to cleaned desc (parenthetical preserved)
+    const result = applyRouteCategory({ routes, warnings });
+    // Network = school (broad match); tag = [metroline].
+    expect(result.routeNetworks.get('144')).toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(result.routeTags.get('144')).toEqual([
+      { id: 'metroline', label: 'Metropolitan', priority: 0 },
+    ]);
+    // long_name falls back to cleaned desc (parenthetical preserved).
     expect(routes[0].route_long_name).toBe('Avram Iancu (Floresti) - Liceul DumitruTautan');
-    // desc is overwritten with BOTH school + metroline (1:many) — the
-    // long_name "TE1 Floresti" matches the school TE-prefix check; the
-    // short_name "M75A" matches the metroline M\d check.
-    expect(routes[0].route_desc).toBe('Transport Elevi, Metropolitan');
+    // route_desc is the metroline tag only -- not prepended with the
+    // school label (school is a network, not a tag, and the
+    // tagged branch is already non-empty so the fallback doesn't
+    // fire).
+    expect(routes[0].route_desc).toBe('Metropolitan');
   });
 
   it('falls through to stop_times when both long_name and desc are empty (CS case)', () => {
@@ -561,22 +710,21 @@ describe('applyRouteCategory — desc strategy', () => {
       { route_id: '205', route_short_name: 'CS', route_long_name: 'CURSA SPECIALA', route_desc: '' },
     ];
     const warnings = [];
-    applyRouteCategory({ routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings });
-    // CS gets its category as desc
+    const result = applyRouteCategory({ routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings });
+    // CS: special tag. route_desc = "Cursa Speciala" (tag, no prepend).
     expect(routes[0].route_desc).toBe('Cursa Speciala');
-    // long_name cleared by CS rule, desc is empty → fallback to stops
+    // long_name cleared by CS rule, desc is empty -> fallback to stops
     expect(routes[0].route_long_name).toMatch(/^.+ - .+$/);
   });
 
-  it('captures parenthetical content from long_name cleanup into desc for un-categorized routes (88A case)', () => {
-    // The signature example from PR review. Route 88A is un-categorized
-    // (88A starts with 8, not M, so no metroline match). Tranzy's
-    // long_name + desc are identical: "Floresti Cetate - Emerson (traseu M21)".
-    // After cleanup, the parenthetical "traseu M21" is stripped from
-    // long_name (→ "Floresti Cetate - Emerson"). The stripped content
-    // becomes the desc since cleanedDesc happens to match cleanedLong
-    // (no unique info there) AND we want the parenthetical surfaced
-    // as informational annotation.
+  it('captures parenthetical content from long_name cleanup into desc for un-tagged routes (88A case)', () => {
+    // Route 88A is un-tagged (88A starts with 8, not M, so no
+    // metroline match; no TE prefix anywhere, no elevi). The
+    // long_name + desc are identical: "Floresti Cetate - Emerson
+    // (traseu M21)". After cleanup, the parenthetical "traseu M21"
+    // is stripped from long_name -> "Floresti Cetate - Emerson".
+    // The parenthetical content becomes the desc since
+    // cleanedDesc == cleanedLong (no unique info there).
     const routes = [
       {
         route_id: '88',
@@ -588,17 +736,13 @@ describe('applyRouteCategory — desc strategy', () => {
     const warnings = [];
     applyRouteCategory({ routes, warnings });
     // Both fields had the same content, so cleanedDesc == cleanedLong.
-    // The parenthetical content is the only unique info.
+    // The parenthetical content is the only unique info. route_desc
+    // is the parenthetical alone -- no network prepending.
     expect(routes[0].route_long_name).toBe('Floresti Cetate - Emerson');
     expect(routes[0].route_desc).toBe('Traseu M21');
   });
 
   it('combines cleaned desc with stripped parenthetical when both contribute unique info', () => {
-    // Synthesize: cleanedDesc has unique info AND long_name has a
-    // stripped parenthetical. Both should land in desc with a separator.
-    // Terminals use 4+ char tokens ("Garii", "Campului", "Someșului")
-    // so the structural-check heuristic can find them on the route
-    // pattern via tokenOverlap.
     const routes = [
       {
         route_id: 'X',
@@ -607,8 +751,6 @@ describe('applyRouteCategory — desc strategy', () => {
         route_desc: 'P-ta Garii - Str. Campului',
       },
     ];
-    // Build a minimal stop_times fixture where the desc's terminals
-    // ("P-ta Garii" + "Str. Campului") ARE on the route pattern.
     const allStopTimeRows = [
       { trip_id: 't-X-a', stop_id: 'S1', stop_sequence: 0 },
       { trip_id: 't-X-a', stop_id: 'S2', stop_sequence: 1 },
@@ -623,13 +765,12 @@ describe('applyRouteCategory — desc strategy', () => {
     const warnings = [];
     applyRouteCategory({ routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings });
     expect(routes[0].route_long_name).toBe('P-ta Garii - Str. Somesului');
+    // Cleaned desc + parenthetical joined by " | ". No network
+    // prepending -- the "good data" desc wins.
     expect(routes[0].route_desc).toBe('P-ta Garii - Str. Campului | Note 1');
   });
 
-  it('title-cases parenthetical content (lowercase → first letter caps)', () => {
-    // "(traseu M21)" → "Traseu M21". Uses "(traseu M21)" rather than
-    // "(untold)" because the latter would categorize the route as
-    // festival before cleanup, defeating the test purpose.
+  it('title-cases parenthetical content (lowercase first letter -> caps)', () => {
     const routes = [
       {
         route_id: 'X',
@@ -643,24 +784,7 @@ describe('applyRouteCategory — desc strategy', () => {
     expect(routes[0].route_desc).toBe('Some unique desc | Traseu M21');
   });
 
-  it('filters out stripped content that matches a category label (defensive)', () => {
-    // The category-filter guard in desc-building is defensive: when a
-    // parenthetical happens to contain text that matches a category
-    // label (case-insensitive) but the route isn't otherwise
-    // categorized, we drop it from desc so we don't accidentally
-    // surface a category signal that classification declined to apply.
-    //
-    // Construction: short_name "X1" doesn't trigger any short_name
-    // regex. long_name uses "(Metropolitan)" — the metroline pattern
-    // is `/^M\d/.test(short_name)`, NOT a substring check on
-    // long_name, so the route reaches the un-categorized branch.
-    // The filter catches "Metropolitan" against the metroline label
-    // "Metropolitan" and drops it.
-    //
-    // (Why not "(Noapte)" or "(Untold)"? The night and festival
-    // patterns do substring-check long_name, so those would
-    // categorize the route before reaching the filter — defeating
-    // the test.)
+  it('filters out stripped content that matches a tag label (defensive)', () => {
     const routes = [
       {
         route_id: 'X',
@@ -672,13 +796,12 @@ describe('applyRouteCategory — desc strategy', () => {
     const warnings = [];
     applyRouteCategory({ routes, warnings });
     expect(routes[0].route_long_name).toBe('Endpoint A - Endpoint B');
-    expect(routes[0].route_desc).toBe('Some desc'); // "Metropolitan" filtered out
+    // "Metropolitan" filtered out from parenthetical pool; the
+    // good desc wins; no network prepending.
+    expect(routes[0].route_desc).toBe('Some desc');
   });
 
   it('dedupes stripped content when both fields capture the same parenthetical', () => {
-    // 88A case again — Tranzy duplicated "(traseu M21)" in both
-    // long_name and desc. The capture should dedupe so the desc
-    // doesn't show "Traseu M21 | Traseu M21".
     const routes = [
       {
         route_id: '88',
@@ -690,17 +813,11 @@ describe('applyRouteCategory — desc strategy', () => {
     const warnings = [];
     applyRouteCategory({ routes, warnings });
     expect(routes[0].route_long_name).toBe('A - B');
-    // Single "Traseu M21", not duplicated.
+    // Single "Traseu M21", not duplicated. No network prepending.
     expect(routes[0].route_desc).toBe('Traseu M21');
   });
 
   it('drops stale long_name variant from desc (Tranzy desc has different destination than long_name)', () => {
-    // Live-data bug: Tranzy publishes a desc whose terminal pair differs
-    // from long_name (e.g. line was restructured, only one of the two
-    // got updated). Without the stale-detection guard, cleanedDesc !=
-    // cleanedLong would surface the contradictory terminal to consumers
-    // (route 23's long_name="P-ta M. Viteazul - C.U.G" but
-    // desc="P-ta M. Viteazul - EMERSON" — confusing riders).
     const routes = [
       {
         route_id: '23',
@@ -714,16 +831,12 @@ describe('applyRouteCategory — desc strategy', () => {
         route_long_name: 'P-ta M. Viteazul Vest - Dacia Service',
         route_desc: 'P-ta M. Viteazul - Cart. Buna Ziua',
       },
-      // Parenthetical content (88A): the heuristic must NOT drop this,
-      // because the "(traseu M21)" annotation is real info.
       {
         route_id: '88A',
         route_short_name: '88A',
         route_long_name: 'A - B (traseu M21)',
         route_desc: 'A - B (traseu M21)',
       },
-      // D51: long_name is just a code, desc has the real terminal info.
-      // The heuristic must NOT drop this.
       {
         route_id: 'D51',
         route_short_name: 'D51',
@@ -733,7 +846,9 @@ describe('applyRouteCategory — desc strategy', () => {
     ];
     const warnings = [];
     applyRouteCategory({ routes, warnings });
-    // 23 and 21: stale variants dropped.
+    // 23 and 21: stale variants dropped. route_desc stays empty
+    // (no useful desc, no parenthetical, normal network -- fallback
+    // empty after omitting "Normal").
     expect(routes[0].route_desc).toBe(''); // route 23
     expect(routes[1].route_desc).toBe(''); // route 21
     // 88A: parenthetical content preserved.
@@ -743,19 +858,12 @@ describe('applyRouteCategory — desc strategy', () => {
   });
 
   it('keeps desc when its terminal IS on the route pattern (structural validation)', () => {
-    // Stronger fix than the format-only check: when the desc's second
-    // terminal DOES appear on the route's actual stop pattern, the
-    // operator intentionally references that stop — keep the desc.
-    //
-    // Synthesized: route "X" with stop_names {P-ta Floresti, Pod Someșeni,
-    // EMERSON}. The desc's second terminal is "EMERSON" — appears on
-    // the pattern → keep.
     const routes = [
       {
         route_id: 'X',
         route_short_name: 'X1',
-        route_long_name: 'P-ta Floresti - Pod Someșeni',
-        route_desc: 'P-ta Floresti - EMERSON', // EMERSON is a real stop on this route
+        route_long_name: 'P-ta Floresti - Pod Someseni',
+        route_desc: 'P-ta Floresti - EMERSON',
       },
     ];
     const allStopTimeRows = [
@@ -766,30 +874,22 @@ describe('applyRouteCategory — desc strategy', () => {
     const tripToRoute = new Map([['t-X-a', 'X']]);
     const stopsByStopId = new Map([
       ['X1', { stop_name: 'P-ta Floresti' }],
-      ['X2', { stop_name: 'Pod Someșeni' }],
+      ['X2', { stop_name: 'Pod Someseni' }],
       ['X3', { stop_name: 'EMERSON' }],
     ]);
     const warnings = [];
     applyRouteCategory({ routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings });
-    // EMERSON is on the route → desc is valid → preserved.
+    // EMERSON is on the route -> desc is valid -> preserved.
     expect(routes[0].route_desc).toBe('P-ta Floresti - EMERSON');
   });
 
   it('drops desc when its terminal is NOT on the route pattern (structural validation)', () => {
-    // Stronger fix: when the desc's second terminal does NOT appear on
-    // the route's pattern at all, it's stale — the operator's desc
-    // references a stop this line doesn't serve.
-    //
-    // Synthesized: route "23" with stop_names {P-ta M. Viteazul, C.U.G}.
-    // The desc says "P-ta M. Viteazul - EMERSON" but EMERSON isn't on
-    // route 23's pattern (it IS on route 52L's pattern, but that
-    // doesn't count) → desc is stale.
     const routes = [
       {
         route_id: '23',
         route_short_name: '23',
         route_long_name: 'P-ta M. Viteazul - C.U.G',
-        route_desc: 'P-ta M. Viteazul - EMERSON', // EMERSON not on route 23
+        route_desc: 'P-ta M. Viteazul - EMERSON',
       },
     ];
     const allStopTimeRows = [
@@ -800,63 +900,95 @@ describe('applyRouteCategory — desc strategy', () => {
     const stopsByStopId = new Map([
       ['S1', { stop_name: 'P-ta M. Viteazul' }],
       ['S2', { stop_name: 'C.U.G' }],
-      // EMERSON exists in the network (e.g. route 52L), but NOT here.
     ]);
     const warnings = [];
     applyRouteCategory({ routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings });
-    // EMERSON is not on this route → desc is stale → dropped.
+    // EMERSON not on this route -> desc is stale -> dropped.
+    // route_desc stays empty (normal network, fallback empty after
+    // omitting "Normal").
     expect(routes[0].route_desc).toBe('');
   });
 
-  it('appends non-category parenthetical to categorized routes (TE + Floresti)', () => {
-    // Marius's PR feedback: "route_desc default = category labels +
-    // captured parenthetical content (human-readable title case), only
-    // when the parenthetical isn't already a category label." The TE
-    // routes whose Tranzy desc ends in "(Floresti)" — the Floresti
-    // commune is the destination of the school bus — get category
-    // label "Transport Elevi" PLUS the captured "Floresti" so riders
-    // see which corridor the school bus serves.
-    //
-    // Reproduces the live data shape: long_name = "TE1F" (the cleanup
-    // already happened upstream; desc still carries the original).
+  it('appends non-tag parenthetical to tagged routes (metroline + Floresti)', () => {
+    // M75B: M* prefix matches metroline tag. long_name has
+    // "(Floresti)" trailing parenthetical. route_desc = "Metropolitan"
+    // (tag) + " | Floresti" (parenthetical). Network = normal
+    // (M75B short_name doesn't match school -- no TE prefix, no
+    // elevi substring).
     const routes = [
       {
         route_id: 'M75B',
-        route_short_name: 'TE1F',
-        route_long_name: 'TE1F',
-        route_desc: 'Liceul Dumitru Tautan - str. Avram Iancu (Floresti)',
+        route_short_name: 'M75B',
+        route_long_name: 'str. Avram Iancu - Liceul Dumitru Tautan (Floresti)',
+        route_desc: '',
       },
     ];
     const warnings = [];
-    applyRouteCategory({ routes, warnings });
-    expect(routes[0].route_long_name).toBe('TE1F');
-    // Category label + non-redundant parenthetical joined with " | ".
-    expect(routes[0].route_desc).toBe('Transport Elevi | Floresti');
+    const result = applyRouteCategory({ routes, warnings });
+    // Network = normal (M75B has no school signal).
+    expect(result.routeNetworks.get('M75B')).toEqual({ id: 'normal', label: 'Normal' });
+    expect(result.routeTags.get('M75B')).toEqual([
+      { id: 'metroline', label: 'Metropolitan', priority: 0 },
+    ]);
+    // Tag label + non-redundant parenthetical joined with " | ".
+    expect(routes[0].route_desc).toBe('Metropolitan | Floresti');
   });
 });
 
-describe('getAllCategories — networks emission input', () => {
-  it('returns the full category list with id + label', () => {
+describe('getAllCategories / getAllTags / getAllNetworks -- surface accessors', () => {
+  it('getAllCategories returns the full list with surface flag', () => {
     const all = getAllCategories();
     expect(all.length).toBe(CATEGORIES.length);
     for (const c of all) {
       expect(c).toHaveProperty('id');
       expect(c).toHaveProperty('label');
-      expect(typeof c.id).toBe('string');
-      expect(typeof c.label).toBe('string');
+      expect(c).toHaveProperty('surface');
+      expect(['tag', 'network']).toContain(c.surface);
     }
   });
 
-  it('exposes the categories neary will need to render', () => {
-    const ids = getAllCategories().map((c) => c.id);
-    expect(ids).toContain('school');
+  it('getAllTags returns tag-surface entries only (excludes networks)', () => {
+    const tags = getAllTags();
+    const tagIds = tags.map((c) => c.id);
+    expect(tagIds).toEqual(['special', 'festival', 'night', 'airport', 'metroline']);
+    for (const t of tags) {
+      expect(t.surface).toBe('tag');
+    }
+  });
+
+  it('getAllNetworks returns network-surface entries only (school + normal)', () => {
+    const nets = getAllNetworks();
+    const netIds = nets.map((c) => c.id);
+    expect(netIds).toEqual(['school', 'normal']);
+    for (const n of nets) {
+      expect(n.surface).toBe('network');
+    }
+  });
+
+  it('exposes the tag ids neary will need to render', () => {
+    const ids = getAllTags().map((c) => c.id);
     expect(ids).toContain('festival');
     expect(ids).toContain('night');
     expect(ids).toContain('airport');
     expect(ids).toContain('metroline');
     expect(ids).toContain('special');
-    // Commuter was removed — D51 isn't a public commuter rail route.
+    // School is a network, not a tag.
+    expect(ids).not.toContain('school');
+    expect(ids).not.toContain('normal');
+    // Commuter was removed -- D51 isn't a public commuter rail route.
     expect(ids).not.toContain('commuter');
+  });
+
+  it('exposes the network ids neary will need to render', () => {
+    const ids = getAllNetworks().map((c) => c.id);
+    expect(ids).toContain('school');
+    expect(ids).toContain('normal');
+    // Tags are not networks.
+    expect(ids).not.toContain('special');
+    expect(ids).not.toContain('festival');
+    expect(ids).not.toContain('night');
+    expect(ids).not.toContain('airport');
+    expect(ids).not.toContain('metroline');
   });
 
   it('uses Romanian labels (matches ctpcj.ro terminology)', () => {
@@ -867,5 +999,6 @@ describe('getAllCategories — networks emission input', () => {
     expect(labels.festival).toBe('Untold');
     expect(labels.airport).toBe('Aeroport Expres');
     expect(labels.special).toBe('Cursa Speciala');
+    expect(labels.normal).toBe('Normal');
   });
 });
