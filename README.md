@@ -80,6 +80,9 @@ The orchestrator picks it up via a `feedConfig` entry in
 - [n3ary/branding](https://github.com/n3ary/branding) — brand assets.
 - [n3ary/standards](https://github.com/n3ary/standards) — vendored into
   `docs/standards/`; drift-checked by `check-standards-drift.yml`.
+- [n3ary/release-bot](https://github.com/n3ary/release-bot) — Cloudflare
+  Worker that opens a CalVer/semver bump PR on every merged-to-main
+  commit. No human action required.
 
 ## License
 
