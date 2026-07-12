@@ -215,9 +215,16 @@ describe('reconcile', () => {
     expect(warnings.some((w) => w.message.includes('Tranzy /trips fallback'))).toBe(true);
   });
 
-  it('emits networks.txt + route_networks.txt with category-classified routes (neary#125, neary#129)', async () => {
-    // Synthesize a Tranzy response with one route per category so we can
-    // pin the file shape end-to-end without depending on the live catalog.
+  it('emits networks.txt + route_networks.txt with the 2-network split (gtfs-adapters#26)', async () => {
+    // Synthesize a Tranzy response with one route per tag so we can pin
+    // the file shape end-to-end without depending on the live catalog.
+    //
+    // Per gtfs-adapters#26: networks.txt has exactly 2 networks
+    // (`school` Transport Elevi, `normal` Normal). Every route is in
+    // one of them. route_networks.txt has one row per route (1:1 by
+    // route_id per the public GTFS spec). The service-class tag
+    // membership (festival / night / metroline / etc.) lives in
+    // route_desc as the comma-joined label list.
     const tranzy = {
       routes: [
         { route_id: '93',  route_short_name: 'TE1',  route_long_name: 'Transport Elevi Manastur',             route_type: 3 },
@@ -225,7 +232,7 @@ describe('reconcile', () => {
         { route_id: '68',  route_short_name: 'M26U', route_long_name: 'Uzinei Electrice - Floresti / Cetate (untold)', route_type: 3 },
         { route_id: '15',  route_short_name: '25N',  route_long_name: 'Str. Bucium - Str. Unirii',            route_type: 11 },
         { route_id: '205', route_short_name: 'CS',   route_long_name: 'CURSA SPECIALA',                       route_type: 3 },
-        // Regular urban — no category, should NOT appear in route_networks.txt.
+        // Regular urban: tag-less, lives in the `normal` network.
         { route_id: '1',   route_short_name: '1',    route_long_name: 'Str. Bucium - P-ta 1 Mai',             route_type: 3 },
       ],
       stops: [],
@@ -250,67 +257,99 @@ describe('reconcile', () => {
     };
     const { files } = await reconcile({ seed: buildFixtureSeedMemory(), tranzy, csv, options: { buildDate: new Date('2026-06-29') } });
 
-    // The seed ships with route M26 (Piata Garii - Selimbar) which
-    // classifies as metroline. So networks.txt also gets a metroline
-    // row from the seed — pin both seed-derived and Tranzy-derived
-    // categories here.
+    // networks.txt — exactly 2 networks: school (TE*) and normal
+    // (everything else). Declared in `getAllNetworks` order:
+    // school first, then normal.
+    //
+    // Service-class tags (special, festival, night, airport,
+    // metroline) are NOT networks anymore — they live in route_desc
+    // as the comma-joined label list. The previous design emitted
+    // one network per used tag, which violated the public spec's
+    // 1:1 rule (issue #4). The new design is the resolution:
+    // networks.txt = 2 rows, period.
     expect(files['networks.txt']).toBe(
       'network_id,network_name\n' +
-      'special,Cursa Speciala\n' +
       'school,Transport Elevi\n' +
-      'festival,Untold\n' +
-      'night,Noapte\n' +
-      'metroline,Metropolitan\n',
+      'normal,Normal\n',
     );
 
-    // route_networks.txt — one row per categorized route, AT MOST one
-    // network per route_id (GTFS spec: a route can belong to at most
-    // one network; the spec DDL enforces this with PRIMARY KEY on
-    // route_id). When a route matches multiple categories
-    // (e.g. M76A / route_id 145 matches both school + metroline
-    // because its long_name "TE2 Floresti" hits the school TE-prefix
-    // check), the first matching category wins — `school` in
-    // getAllCategories() order, which puts specific labels before
-    // general ones. Previously, INSERT OR IGNORE in the orchestrator
-    // silently dropped duplicates; now the adapter dedupes before
-    // writing so the DB constraint doesn't surface.
+    // route_networks.txt — one row per route, 1:1 by route_id.
+    // Sorted by (network_id, route_id) for diff-stability.
+    // - TE1 (route 93) is the only school network row.
+    // - Everything else (including M26 from the seed) is normal.
     const rnLines = files['route_networks.txt'].trim().split('\n');
     expect(rnLines[0]).toBe('network_id,route_id');
+    // 8 routes total: 1 school + 7 normal (6 Tranzy + 2 seed - 1 dropped?)
+    // Actually: 6 Tranzy routes + 2 seed routes (35, M26) - 0 phantoms = 8
+    expect(rnLines.length).toBe(9); // header + 8 data rows
     expect(rnLines).toContain('school,93');
-    expect(rnLines).toContain('school,145'); // first match wins (specific > general)
-    expect(rnLines).not.toContain('metroline,145'); // deduped — school won
-    expect(rnLines).toContain('festival,68');
-    expect(rnLines).not.toContain('metroline,68'); // deduped — festival won
-    expect(rnLines).toContain('night,15');
-    expect(rnLines).toContain('special,205');
-    expect(rnLines).toContain('metroline,M26');
-    expect(rnLines).not.toContainEqual(expect.stringMatching(/^[^,]*,1$/));
+    expect(rnLines).toContain('normal,1');
+    expect(rnLines).toContain('normal,15');
+    expect(rnLines).toContain('normal,68');
+    expect(rnLines).toContain('normal,145');
+    expect(rnLines).toContain('normal,205');
+    expect(rnLines).toContain('normal,35');
+    expect(rnLines).toContain('normal,M26');
+    // Regression: 1:many emissions are gone. There must be NO row
+    // for `metroline` (or any other tag id) -- only `school` and
+    // `normal`.
+    for (const line of rnLines.slice(1)) {
+      const [networkId] = line.split(',');
+      expect(['school', 'normal']).toContain(networkId);
+    }
 
     // routes.txt — route_desc carries the human label(s) comma-separated
-    // for 1:many, route_long_name is in start-end format (or empty for CS).
+    // for 1:many tag cases, route_long_name is in start-end format.
+    //
+    // School-network routes (TE*) have NO tag in route_desc (school
+    // is network-only under the new model). The school designation
+    // lives in route_networks.txt only.
     const routesTxt = files['routes.txt'];
     const r93row = routesTxt.split('\n').find((l) => l.startsWith('93,'));
-    expect(r93row).toMatch(/,Manastur,Transport Elevi,/);
+    // TE1: cleaned long_name = "Manastur", desc is un-tagged so it
+    // falls through to the un-tagged branch. The "Transport Elevi"
+    // label is NOT in route_desc.
+    expect(r93row).toMatch(/,Manastur,,/);
+
     const r145row = routesTxt.split('\n').find((l) => l.startsWith('145,'));
-    // M76A: "TE2 Floresti " stripped → "str. Somesului". route_desc is
-    // now "Transport Elevi, Metropolitan" (1:many via TE prefix in
-    // long_name + M* prefix in short_name). CSV writer quotes the field
-    // because it contains a comma.
-    expect(r145row).toMatch(/,str\. Somesului,"Transport Elevi, Metropolitan",/);
+    // M76A: "TE2 Floresti " stripped from long_name -> "str. Somesului".
+    // Under the new model, M76A is metroline-only (no school tag --
+    // the M7x long_name TE prefix is no longer a school signal).
+    // route_desc = "Metropolitan" (single tag).
+    expect(r145row).toMatch(/,str\. Somesului,Metropolitan,/);
+
     const r68row = routesTxt.split('\n').find((l) => l.startsWith('68,'));
     // Trailing "(untold)" stripped from long_name. M26U is also
-    // metroline (M* prefix) → route_desc carries both labels.
-    expect(r68row).toMatch(/,Uzinei Electrice - Floresti \/ Cetate,(?:"Untold, Metropolitan"|Untold, Metropolitan),/);
+    // metroline (M* prefix) -> route_desc carries both tag labels.
+    // CSV writer quotes the field because it contains a comma.
+    expect(r68row).toMatch(/,Uzinei Electrice - Floresti \/ Cetate,"Untold, Metropolitan",/);
+
     const r15row = routesTxt.split('\n').find((l) => l.startsWith('15,'));
+    // 25N: night tag. route_desc = "Noapte".
     expect(r15row).toMatch(/,Str\. Bucium - Str\. Unirii,Noapte,/);
+
     const r205row = routesTxt.split('\n').find((l) => l.startsWith('205,'));
-    // CS long_name cleared, route_desc = "Cursa Speciala"
+    // CS: special tag. route_desc = "Cursa Speciala".
+    // CS long_name cleared to '' (CS rule); the un-tagged branch
+    // would try the stops fallback but the CS fixture has only
+    // stop A (single-stop trip), so long_name stays empty.
     expect(r205row).toMatch(/,CS,,Cursa Speciala,/);
+
     // Regular urban: empty route_desc. The field after the destination
     // string is route_desc — index 4 (0=route_id, 1=agency_id,
     // 2=route_short_name, 3=route_long_name, 4=route_desc).
     const r1row = routesTxt.split('\n').find((l) => l.startsWith('1,'));
     expect(r1row.split(',')[4]).toBe('');
+
+    // Seed routes: M26 is metroline-only tag, 35 is un-tagged.
+    // (M26's long_name was reversed to "Selimbar - Gara" by the
+    // route desc/headsign processing -- the seed's published
+    // direction-1 headsign is "Piata Garii" but the route_long_name
+    // swap shows the canonical "Selimbar - Gara".)
+    const rM26row = routesTxt.split('\n').find((l) => l.startsWith('M26,'));
+    expect(rM26row).toMatch(/,Selimbar - Gara,Metropolitan,/);
+    const r35row = routesTxt.split('\n').find((l) => l.startsWith('35,'));
+    expect(r35row).toMatch(/,Piata Garii - Cart\. Zorilor,,/);
   });
 
   it('derives route_long_name from stop_times when cleanup leaves it empty', async () => {

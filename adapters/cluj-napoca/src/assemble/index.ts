@@ -169,7 +169,17 @@ export async function reconcile({ seed, tranzy, csv, options = {} }) {
   // `deriveLongNameFromStops()` for the fallback logic.
   const tripToRoute = new Map();
   for (const t of allTripRows) tripToRoute.set(String(t.trip_id), String(t.route_id));
-  applyRouteCategory({
+  // Route taxonomy classification (per gtfs-adapters#26):
+  //   - `routeNetworks` -- Map<route_id, {id, label}> for the
+  //     `networks.txt` + `route_networks.txt` 1:1 surface. Exactly
+  //     one entry per route: `school` (TE* short_name) or `normal`
+  //     (everything else).
+  //   - `routeTags` -- Map<route_id, [{id, label, priority}]> for
+  //     the `route_desc` comma-joined label list. The 1:many surface
+  //     (a route can carry multiple tags).
+  // The orchestrator consumes the maps directly; no `route_desc`
+  // roundtrip needed.
+  const { routeNetworks, networkCounts } = applyRouteCategory({
     routes,
     allStopTimeRows,
     tripToRoute,
@@ -186,11 +196,10 @@ export async function reconcile({ seed, tranzy, csv, options = {} }) {
     warnings,
   });
 
-  // Networks + route_networks — derived from the classified `route_desc`
-  // values that `applyRouteCategory` just populated. Empty for feeds
-  // with no categorized routes (caller drops the file from the zip).
+  // Networks + route_networks — derived from the structured
+  // `routeNetworks` map that `applyRouteCategory` just populated.
   // See `src/assemble/emit/networks.js` for emission rules.
-  const { networksTxt, routeNetworksTxt, networkUsage } = buildNetworks(routes);
+  const { networksTxt, routeNetworksTxt, networkUsage } = buildNetworks(routes, routeNetworks);
   if (networkUsage.size > 0) {
     warnings.push(info(`networks: ${formatNetworkUsageSummary(networkUsage)}`));
   }
