@@ -21,17 +21,22 @@ import { SCHEMA } from '@n3ary/gtfs-spec/sql';
  *   3. networks.network_color was computed for at least one network
  *   4. _neary_config exists with the right rows from feedConfig.timing
  *   5. _route_tags table extension (issue #25) — DDL landed, rows
- *      inserted verbatim from feedConfig.routeTags, n:m works
+ *      inserted after the adapter coerces the raw CSV strings into
+ *      typed SQLite values (`priority` -> INTEGER, empty `tag_label`
+ *      / `priority` -> NULL). n:m works.
  */
 
 const SYNTHETIC_ROUTE_TAGS = [
   // R1 matches only `night` (1:1) — the synth route's `route_id`
   // mapping is the same as the routes table.
-  { tag_id: 'night', route_id: 'R1', tag_label: 'Noapte', priority: 3 },
+  // The orchestrator hands the adapter raw CSV rows
+  // (`Record<string, string>`); the adapter does the schema coercion
+  // in `staticExtension()`.
+  { tag_id: 'night', route_id: 'R1', tag_label: 'Noapte', priority: '3' },
   // R2 matches two tags (1:many) — school + metroline. The
   // extension table's whole point is to carry both rows.
-  { tag_id: 'school', route_id: 'R2', tag_label: 'Transport Elevi', priority: 1 },
-  { tag_id: 'metroline', route_id: 'R2', tag_label: 'Metropolitan', priority: 5 },
+  { tag_id: 'school', route_id: 'R2', tag_label: 'Transport Elevi', priority: '1' },
+  { tag_id: 'metroline', route_id: 'R2', tag_label: 'Metropolitan', priority: '5' },
 ];
 
 const WORK = join(tmpdir(), `adapter-static-ext-${Date.now()}`);
@@ -250,7 +255,10 @@ describe('staticExtension', () => {
     buildSyntheticSqlite();
     const ext = staticExtension({
       routeTags: [
-        { tag_id: 'school', route_id: 'R1' /* no tag_label, no priority */ },
+        // Empty string priority + missing tag_label — simulates a
+        // CSV row with trailing empty cells. The adapter coerces
+        // empty strings to NULL, not crashes on Number('').
+        { tag_id: 'school', route_id: 'R1', tag_label: '', priority: '' },
       ],
     });
     const db = runExtension(ext);

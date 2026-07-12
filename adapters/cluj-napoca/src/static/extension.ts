@@ -85,31 +85,55 @@ export interface StaticExtension {
  * interpretation.
  *
  * **For `_route_tags` rows (issue #25)**: the orchestrator is expected
- * to populate `feedConfig.routeTags` with the parsed `_route_tags.txt`
- * content from the zip before calling `staticExtension()`. Each entry
- * is a `{ tag_id, route_id, tag_label, priority }` object — the same
- * shape the cluj adapter's `assemble/emit/routeTags.ts` emits. When
- * the field is absent (or empty), the pipeline still creates the
- * table (so consumers can issue `SELECT ... LIMIT 0`) but inserts no
- * rows. See the "Route taxonomy surfaces" section of
+ * to populate `feedConfig.routeTags` by parsing `_route_tags.txt` from
+ * the zip (see `producerExtensions` below) before calling
+ * `staticExtension()`. The orchestrator does not interpret the rows —
+ * it just hands the raw CSV `Record<string, string>` to the adapter.
+ * The adapter is responsible for schema coercion (e.g. `priority` ->
+ * number) before inserting into the SQLite table. Absent / empty ->
+ * table is still created (so consumers can issue `SELECT ... LIMIT 0`)
+ * but inserts no rows. See the "Route taxonomy surfaces" section of
  * `docs/quirks-and-rules.md` for the data-flow contract.
  */
 export type StaticExtensionFeedConfig = {
   timing?: unknown;
   /**
-   * Optional pre-computed `_route_tags` rows. The orchestrator is
-   * expected to populate this by parsing `_route_tags.txt` from the
-   * zip before calling `staticExtension()`. Absent / empty → table is
-   * still created but no rows are inserted.
+   * Pre-parsed `_route_tags.txt` rows. The orchestrator populates
+   * this by walking `producerExtensions` and reading the declared
+   * file from the zip via a generic CSV reader. Each entry is the
+   * raw CSV row (`Record<string, string>`) — the adapter does the
+   * schema coercion in `staticExtension()`.
    */
-  routeTags?: ReadonlyArray<{
-    tag_id: string;
-    route_id: string;
-    tag_label?: string | null;
-    priority?: number | null;
-  }>;
+  routeTags?: ReadonlyArray<Record<string, string>>;
   [key: string]: unknown;
 };
+
+/**
+ * Producer-extension files the orchestrator should parse from the GTFS
+ * zip and hand to `staticExtension(feedConfig)`. The orchestrator
+ * treats these as opaque (it just reads the CSV and sets
+ * `feedConfig[feedConfigKey] = rows`); the adapter owns the schema
+ * interpretation. This is the contract that keeps the publisher
+ * feed-agnostic — adding a new producer extension is an adapter-only
+ * change, not a publisher change.
+ *
+ * For the cluj adapter, the only declared producer extension is
+ * `_route_tags.txt` (issue #25, the n:m route->tag mapping). Adding
+ * another file in the future (e.g. `_poi.txt`, `_fare_zones.txt`) is
+ * a one-line entry here plus a corresponding `tableExtension`
+ * registration in `staticExtension()`.
+ */
+export const producerExtensions: ReadonlyArray<{
+  /** File name in the GTFS zip (e.g. '_route_tags.txt'). */
+  fileName: string;
+  /**
+   * Key on `feedConfig` the orchestrator should populate with the
+   * parsed rows. The adapter reads this key in `staticExtension()`.
+   */
+  feedConfigKey: string;
+}> = [
+  { fileName: '_route_tags.txt', feedConfigKey: 'routeTags' },
+];
 
 /**
  * Construct the StaticExtension object for this feed.
@@ -186,13 +210,24 @@ export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticEx
           ['tag_label', 'TEXT'],
           ['priority', 'INTEGER'],
         ],
+        // Coerce the raw CSV rows (which arrive as `Record<string, string>`
+        // from the orchestrator's generic CSV reader) into the typed
+        // shape the SQLite column needs. Empty string / missing ->
+        // null. Numeric `priority` is parsed defensively: an empty
+        // string or non-numeric value becomes null (the SQLite
+        // `INTEGER` column would otherwise reject the row, and a
+        // malformed emit is loud failure not silent data loss).
         rows: feedConfig.routeTags && feedConfig.routeTags.length > 0
-          ? feedConfig.routeTags.map((r) => ({
-              tag_id: r.tag_id,
-              route_id: r.route_id,
-              tag_label: r.tag_label ?? null,
-              priority: r.priority ?? null,
-            }))
+          ? feedConfig.routeTags.map((r) => {
+              const priorityRaw = r.priority?.trim() ?? '';
+              const priorityNum = priorityRaw === '' ? null : Number(priorityRaw);
+              return {
+                tag_id: r.tag_id ?? '',
+                route_id: r.route_id ?? '',
+                tag_label: r.tag_label && r.tag_label.length > 0 ? r.tag_label : null,
+                priority: priorityNum !== null && Number.isFinite(priorityNum) ? priorityNum : null,
+              };
+            })
           : [],
       },
     },
