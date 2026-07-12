@@ -135,6 +135,12 @@ export function buildRouteTags(routeTags) {
 /**
  * Format a build-log INFO summary of the extension row count.
  *
+ * The output format is:
+ *   "N rows covering M route(s) (X 1:many)"
+ * where N is the total number of rows in the extension, M is the
+ * number of distinct routes that have at least one tag, and X is
+ * the number of routes with more than one tag (the n:m cases).
+ *
  * @param {Map<string, ReadonlyArray<RouteTag>>} routeTags
  * @returns {string} single-line summary, empty when there are no rows
  */
