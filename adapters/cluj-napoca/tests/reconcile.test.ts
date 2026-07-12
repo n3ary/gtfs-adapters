@@ -273,20 +273,21 @@ describe('reconcile', () => {
       'normal,Normal\n',
     );
 
-    // route_networks.txt — one row per route, 1:1 by route_id.
+    // route_networks.txt -- one row per route, 1:1 by route_id.
     // Sorted by (network_id, route_id) for diff-stability.
-    // - TE1 (route 93) is the only school network row.
+    // - TE1 (route 93) and M76A (route 145) are in the school
+    //   network (broad match: TE* short_name OR TE* long_name).
     // - Everything else (including M26 from the seed) is normal.
     const rnLines = files['route_networks.txt'].trim().split('\n');
     expect(rnLines[0]).toBe('network_id,route_id');
-    // 8 routes total: 1 school + 7 normal (6 Tranzy + 2 seed - 1 dropped?)
-    // Actually: 6 Tranzy routes + 2 seed routes (35, M26) - 0 phantoms = 8
     expect(rnLines.length).toBe(9); // header + 8 data rows
     expect(rnLines).toContain('school,93');
+    // M76A long_name starts with "TE2 Floresti" -> school network
+    // (broad match: TE* in long_name).
+    expect(rnLines).toContain('school,145');
     expect(rnLines).toContain('normal,1');
     expect(rnLines).toContain('normal,15');
     expect(rnLines).toContain('normal,68');
-    expect(rnLines).toContain('normal,145');
     expect(rnLines).toContain('normal,205');
     expect(rnLines).toContain('normal,35');
     expect(rnLines).toContain('normal,M26');
@@ -298,24 +299,24 @@ describe('reconcile', () => {
       expect(['school', 'normal']).toContain(networkId);
     }
 
-    // routes.txt — route_desc carries the human label(s) comma-separated
-    // for 1:many tag cases, route_long_name is in start-end format.
-    //
-    // School-network routes (TE*) have NO tag in route_desc (school
-    // is network-only under the new model). The school designation
-    // lives in route_networks.txt only.
+    // routes.txt -- route_desc carries tag labels (comma-joined) for
+    // tagged routes, with parenthetical / cleaned desc via " | " when
+    // applicable. School is a NETWORK, not a tag, so a school-route
+    // with no tag gets the empty-desc fallback ("Transport Elevi")
+    // -- the school designation is still surfaced in route_desc.
     const routesTxt = files['routes.txt'];
     const r93row = routesTxt.split('\n').find((l) => l.startsWith('93,'));
-    // TE1: cleaned long_name = "Manastur", desc is un-tagged so it
-    // falls through to the un-tagged branch. The "Transport Elevi"
-    // label is NOT in route_desc.
-    expect(r93row).toMatch(/,Manastur,,/);
+    // TE1: school network, no tag, no useful desc. Empty-desc
+    // fallback fires -> route_desc = "Transport Elevi".
+    expect(r93row).toMatch(/,Manastur,Transport Elevi,/);
 
     const r145row = routesTxt.split('\n').find((l) => l.startsWith('145,'));
     // M76A: "TE2 Floresti " stripped from long_name -> "str. Somesului".
-    // Under the new model, M76A is metroline-only (no school tag --
-    // the M7x long_name TE prefix is no longer a school signal).
-    // route_desc = "Metropolitan" (single tag).
+    // Network = school (broad match: TE* in long_name). Tag = metroline.
+    // route_desc is the metroline tag only ("Metropolitan") -- the
+    // school label is in route_networks.txt + (via the empty-desc
+    // fallback that doesn't apply here because route_desc is
+    // non-empty).
     expect(r145row).toMatch(/,str\. Somesului,Metropolitan,/);
 
     const r68row = routesTxt.split('\n').find((l) => l.startsWith('68,'));
@@ -325,18 +326,19 @@ describe('reconcile', () => {
     expect(r68row).toMatch(/,Uzinei Electrice - Floresti \/ Cetate,"Untold, Metropolitan",/);
 
     const r15row = routesTxt.split('\n').find((l) => l.startsWith('15,'));
-    // 25N: night tag. route_desc = "Noapte".
+    // 25N: night tag. route_desc = "Noapte" (single tag).
     expect(r15row).toMatch(/,Str\. Bucium - Str\. Unirii,Noapte,/);
 
     const r205row = routesTxt.split('\n').find((l) => l.startsWith('205,'));
-    // CS: special tag. route_desc = "Cursa Speciala".
+    // CS: special tag. route_desc = "Cursa Speciala" (single tag).
     // CS long_name cleared to '' (CS rule); the un-tagged branch
     // would try the stops fallback but the CS fixture has only
     // stop A (single-stop trip), so long_name stays empty.
     expect(r205row).toMatch(/,CS,,Cursa Speciala,/);
 
-    // Regular urban: empty route_desc. The field after the destination
-    // string is route_desc — index 4 (0=route_id, 1=agency_id,
+    // Regular urban: empty route_desc ("Normal" omitted from the
+    // empty-desc fallback). The field after the destination string
+    // is route_desc -- index 4 (0=route_id, 1=agency_id,
     // 2=route_short_name, 3=route_long_name, 4=route_desc).
     const r1row = routesTxt.split('\n').find((l) => l.startsWith('1,'));
     expect(r1row.split(',')[4]).toBe('');
@@ -347,8 +349,10 @@ describe('reconcile', () => {
     // direction-1 headsign is "Piata Garii" but the route_long_name
     // swap shows the canonical "Selimbar - Gara".)
     const rM26row = routesTxt.split('\n').find((l) => l.startsWith('M26,'));
+    // M26: metroline tag. route_desc = "Metropolitan" (single tag).
     expect(rM26row).toMatch(/,Selimbar - Gara,Metropolitan,/);
     const r35row = routesTxt.split('\n').find((l) => l.startsWith('35,'));
+    // 35: un-tagged regular urban, route_desc empty (Normal omitted).
     expect(r35row).toMatch(/,Piata Garii - Cart\. Zorilor,,/);
   });
 
