@@ -17,6 +17,7 @@ For the data-quality data-loss categories see
 - [`*`/`**` CSV annotations](#csv-annotations-and-suspension-markers)
 - [Origin label matching: exact / fuzzy / no-match](#origin-label-matching-exact--fuzzy--no-match)
 - [Stale `route_desc` vs `route_long_name`](#stale-route_desc-vs-route_long_name-tranzy-publishes-contradictory-terminals)
+- [Route taxonomy surfaces: `route_desc`, `networks.txt`, `route_networks.txt`, `_route_tags`](#route-taxonomy-surfaces-route_desc-networks_txt-route_networks_txt-_route_tags)
 - [Frequency annotations and anchor trips](#frequency-annotations-and-anchor-trips)
 - [Tranzy /trips fallback for routes without CSV](#tranzy-trips-fallback-for-routes-without-csv)
 - [Suspension markers (`Nu circula` etc.)](#suspension-markers-nu-circula-etc)
@@ -340,6 +341,145 @@ flagged the destination-mismatch and dropped it.
 
 ---
 
+## Route taxonomy surfaces: `route_desc`, `networks.txt`, `route_networks.txt`, `_route_tags`
+
+Per gtfs-adapters#26, the cluj adapter splits route taxonomy into
+**two surfaces** — **networks** (operator / service identity, 1:1
+by `route_id` per the public GTFS spec) and **tags** (service-class
+taxonomy, 1:many by `route_id`). Both surfaces, plus the producer
+extension, are surfaced through **four** different table-like
+artifacts in the published feed. The four are **not** redundant —
+each carries different cardinality and is read by different
+consumers.
+
+### The four surfaces
+
+| Surface | Source | Cardinality | What it carries |
+| --- | --- | --- | --- |
+| `routes.route_desc` (tagged) | `applyRouteCategory` -> comma-joined tag labels | n:m | All matching tag labels, comma-joined (e.g. `"Metropolitan, Untold"` for an M26U) |
+| `networks.txt` `network_name` | the matched network's `label` | 1 per used network | Same string as `networks.txt` `network_name` |
+| `route_networks.txt` (public) | `applyRouteCategory.routeNetworks` (1 network per route) | 1:1 by `route_id` | `(network_id, route_id)` — every route is in exactly one of `school` or `normal` |
+| `_route_tags` (producer extension, issue #25) | `applyRouteCategory.routeTags` (all matching tags) | n:m | `(tag_id, route_id, tag_label, priority)` |
+
+### Why 1:many tags diverge from the 1:1 network surface
+
+The public GTFS spec's `route_networks.txt` is 1:1 by `route_id`
+(PK is `route_id` alone). A feed that emits 1:many rows for the
+same route is malformed — see [issue #4](#) for the
+analysis. That's why the cluj adapter's network surface is exactly
+2 networks (`school` for `TE*` short_name, `normal` for everything
+else) with a deterministic priority-pick.
+
+The **tag** surface is different. A route can carry multiple tags
+(e.g. M26U is both `festival` AND `metroline`). Two places carry
+that 1:many membership:
+
+- `route_desc` (the comma-joined label list, n:m). The
+  human-readable surface; what neary renders as a route badge.
+- `_route_tags` (producer extension, n:m). The queryable surface;
+  what the n3ary app reads when it needs to filter / group /
+  aggregate the full tag membership (e.g. "show me every
+  festival-tagged route", which is a SQL query against the
+  SQLite blob, not a string-parsing exercise).
+
+### Why not encode service class in `route_type`?
+
+`route_type` is the spec's "route system taxonomy" column (bus,
+rail, subway, ...). Encoding service-class info (`school`,
+`metroline`, `festival`) as non-standard `route_type` integers is
+the obvious shortcut, but it would:
+
+- Lie to consumers — a `school` route is still `route_type=3` Bus.
+- Conflict with the GTFS `route_types` enumeration.
+- Lock us into a per-feed integer scheme no other consumer can
+  decode without our private docs.
+
+`_route_tags` keeps `route_type` honest and lets per-feed adapters
+publish extra taxonomy as plain, queryable rows. The DDL is
+producer-defined (lives in the cluj adapter's `extension.ts`,
+Option 2 of issue #25) and is:
+
+```sql
+CREATE TABLE _route_tags (
+  tag_id    TEXT NOT NULL,
+  route_id  TEXT NOT NULL,
+  tag_label TEXT,
+  priority  INTEGER,
+  PRIMARY KEY (tag_id, route_id)
+) WITHOUT ROWID;
+```
+
+The composite PK on `(tag_id, route_id)` — NOT just `route_id` —
+is the whole point: the n:m mapping IS the row. `priority` is
+the `TAGS` declaration index (0-based) and gives consumers a
+stable sort order for badge rendering.
+
+### Priority-first consistency check
+
+For every `route_id` in `route_networks.txt`, the corresponding
+`network_id` is the public 1:1 surface; for every `route_id` in
+`_route_tags`, the **first** row by `priority` MUST equal that
+same `network_id` (when one of the tags is the network — e.g. the
+`school` tag is network-only and doesn't appear in `_route_tags`).
+This is a one-line smoke test the pipeline can run before
+publish — drift means the classifier's priority-pick diverged
+from what the orchestrator emitted to the public table, and the
+feed shouldn't ship until the discrepancy is resolved.
+
+### Consumers reading each surface
+
+- **neary (app side)**: reads `route_desc` for the human badge
+  string and `_route_tags` for the full n:m membership (e.g. to
+  render "this route is both festival and metroline" with two
+  chips, not just the priority-pick one). The `route_networks.txt`
+  join is used only for the chip color / icon lookup (which
+  key the public spec provides).
+- **OTP, Google Maps, generic GTFS tooling**: reads
+  `route_networks.txt` for the 1:1 mapping. The desc shows
+  every label (n:m), so a generic consumer sees a
+  "Metropolitan, Untold" desc on M26U — descriptive, but they
+  don't get the second tag as a separate `route_networks` row.
+- **Feed authors** (e.g. Marius checking the build log): the
+  build-log INFO `_route_tags: N rows covering M routes (X
+  1:many)` surfaces the extension-side counts alongside the
+  public `networks:` line. The two numbers together give the
+  full picture.
+
+### Where the data flows
+
+```
+[cluj adapter TAGS declaration (per-surface)]
+  - network surface: school (TE* short_name) + normal (fallback)
+  - tag surface: special, festival, night, airport, metroline
+            |
+            v
+applyRouteCategory(routes, ...)
+   1. classify networks (1:1, priority-pick)
+   2. classify tags (1:m, in TAGS order)
+   3. clean long_name + desc
+   4. resolve long_name fallback (cleaned desc -> stop_times)
+   5. set route_desc = comma-joined tag labels (tagged)
+      or cleaned desc (un-tagged) or '' (no unique info)
+   6. return routeNetworks: Map<route_id, {id, label}>
+      AND routeTags: Map<route_id, [{id, label, priority}]>
+            |
+            +--> buildNetworks(routes, routeNetworks)
+            |       -> networks.txt (school + normal)
+            |       -> route_networks.txt (1:1, every route)
+            |
+            +--> buildRouteTags(routeTags)
+                    -> _route_tags.txt (n:m, all matching tags)
+```
+
+The structured maps are the **single source of truth**. Neither
+emitter reverse-parses `route_desc` — that round-trip is fragile
+and was the source of the 1:many violation that gtfs-adapters#4
+fixed. Both emitters read the same orchestrator return value, so
+the desc's formatting can change freely without breaking
+downstream emitters.
+
+---
+
 ## Frequency annotations and anchor trips
 
 CTP's CSV cells aren't always `HH:MM` — some are frequency
@@ -463,6 +603,14 @@ out here for quick reference:
   `neary`'s `parseLiveStartMin` rely on it).
 - **`feed_info.txt`** identifies us as `cluj-napoca-gtfs-adapter`,
   not as CTP or Transitous. We do not impersonate upstream sources.
+- **`_route_tags.txt` is a producer extension** (issue #25), not a
+  public spec file. It carries the n:m route→tag membership that
+  `route_networks.txt` can't (the public spec's 1:1 PK forbids
+  n:m rows). The DDL lives in the cluj adapter's `extension.ts`
+  (Option 2 of issue #25 — the spec stays feed-agnostic, mirroring
+  the `_neary_config` precedent). See
+  [Route taxonomy surfaces](#route-taxonomy-surfaces-route_desc-networks_txt-route_networks_txt-_route_tags)
+  for the full four-surface contract.
 
 ---
 
