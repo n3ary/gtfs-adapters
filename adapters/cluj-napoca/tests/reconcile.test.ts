@@ -278,15 +278,21 @@ describe('reconcile', () => {
     // - TE1 (route 93) and M76A (route 145) are in the school
     //   network (broad match: TE* short_name OR TE* long_name).
     // - Everything else (including M26 from the seed) is normal.
+    // - route 40 (short_name=42) is also normal -- its short_name
+    //   is "42" (numeric, no tag pattern), so the classifier
+    //   treats it as a vanilla urban bus. The `route_id` and
+    //   `route_short_name` are SEPARATE GTFS fields; the fixture
+    //   exercises the realistic cluj case where they differ.
     const rnLines = files['route_networks.txt'].trim().split('\n');
     expect(rnLines[0]).toBe('network_id,route_id');
-    expect(rnLines.length).toBe(9); // header + 8 data rows
+    expect(rnLines.length).toBe(10); // header + 9 data rows
     expect(rnLines).toContain('school,93');
     // M76A long_name starts with "TE2 Floresti" -> school network
     // (broad match: TE* in long_name).
     expect(rnLines).toContain('school,145');
     expect(rnLines).toContain('normal,1');
     expect(rnLines).toContain('normal,15');
+    expect(rnLines).toContain('normal,40');
     expect(rnLines).toContain('normal,68');
     expect(rnLines).toContain('normal,205');
     expect(rnLines).toContain('normal,35');
