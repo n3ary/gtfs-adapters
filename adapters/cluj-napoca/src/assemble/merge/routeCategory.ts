@@ -135,19 +135,31 @@ export const CATEGORIES = [
     id: 'school',
     label: 'Transport Elevi',
     surface: 'network',
-    // School-network routes are exactly the Transport Elevi (TE)
-    // operator's routes -- `route_short_name` is a closed set of
-    // TE-prefixed identifiers: TE1..TE14, TE-OG.
+    // School-network routes are the Transport Elevi (TE) operator's
+    // routes. The match is intentionally broad -- TE-prefixed
+    // `route_short_name` (TE1..TE14, TE-OG), TE-prefixed `long_name`
+    // (the M7x school-bus family: M76A with long_name "TE1 Floresti
+    // ..." or "TE1F"), and the defensive `elevi` substring catch
+    // across all 3 fields (catches operator-named variants CTP may
+    // introduce later, e.g. "ELEVI-99" or a long_name with "Transport
+    // Elevi -").
     //
-    // This is the ONLY school predicate. The previous overbroad match
-    // (long_name starting with "TE\d+ Floresti" or "elevi" substring)
-    // was dropped in issue #26: school is a network, not a tag, so
-    // the overbroad catch has no surface to land on. The M7x metroline
-    // family whose long_name was "TE1 Floresti ..." now lands in
-    // the `normal` network tagged as `metroline` -- same operational
-    // reality (Florești metroline services that happen to also serve
-    // school destinations), cleaner data shape.
-    match: (s) => /^TE/i.test(s),
+    // School is a NETWORK, not a tag (gtfs-adapters#26). The M7x
+    // family lands in the school network AND the metroline tag (M*
+    // short_name) -- so 1 network + 1 tag. A defensive `elevi`
+    // substring match in a route's long_name / route_desc puts the
+    // route in the school network without surfacing a "Transport
+    // Elevi" tag in route_desc (school isn't a tag).
+    match: (s, l, d) =>
+      /^TE/i.test(s) ||
+      /^TE/i.test(l) ||  // M7x school-bus family: long_name="TE1F",
+                         // "TE1 Floresti", "TE2 Floresti" (Tranzy
+                         // keeps the school designation as long_name
+                         // even though short_name has the M* metroline
+                         // prefix).
+      /elevi/i.test(s) ||
+      /elevi/i.test(l) ||
+      /elevi/i.test(d),
   },
   {
     id: 'festival',
@@ -644,40 +656,33 @@ function tagLabelSetLower() {
  *      desc (when long_name ended up empty after cleanup but desc has
  *      data) -> `<first stop> - <last stop>` from stop_times.
  *
- *   5. **route_desc strategy** (Marius's "all useful information in
- *      Description" rule, refined to include the network label):
- *      - Stripped parenthetical content (title-cased) is computed once
- *        as a shared pool, with anything matching a tag label
- *        filtered out (so we don't redundantly surface "Untold" when
- *        the route is already tagged as festival).
- *      - The **label list** is `[network label, ...tag labels]` --
- *        network first (operator identity), then tag labels in
- *        CATEGORIES declaration order. For an un-tagged route this
- *        is just the network label (e.g. `"Normal"` for a regular
- *        urban route). For a 1:many case (M26U) this is
- *        `"Normal, Untold, Metropolitan"`.
- *      - If the parenthetical pool has non-redundant content, it's
- *        appended via " | " -- e.g. an M76A whose desc ends in
- *        "(Floresti)" -> `"Normal, Metropolitan | Floresti"`, so
- *        riders see which commune the route serves.
- *      - For un-tagged routes whose cleaned desc carries unique info
- *        (e.g. D51's "P-ta Mihai Viteazu - Gilau" -- the desc is
- *        the only place the endpoint lives), the cleaned desc is
- *        appended via " | " after the network label. The parenthetical
- *        pool joins the same way.
- *      - **Every route gets the network label in `route_desc`**.
- *        The previous design put school/normal only in
- *        `route_networks.txt`; that worked for spec compliance but
- *        left `route_desc` (the human-readable surface) without the
- *        operator-identity signal. The new design makes `route_desc`
- *        a complete label list, with `route_networks.txt` as the
- *        structured 1:1 join. Consumers who only read `route_desc`
- *        get the full classification.
+ *   5. **route_desc strategy** ("don't override good data" + fallback):
+ *      - Run the original "preserve good data" desc strategy: the
+ *        route's existing desc content (cleaned desc with unique
+ *        info, or stripped parenthetical content) takes priority.
+ *        The new-model classification is an ADDITIVE surface -- it
+ *        does NOT replace good data.
+ *      - Tagged case: `route_desc` is the comma-joined tag labels
+ *        (`"Untold, Metropolitan"` for an M26U). If the parenthetical
+ *        pool adds non-redundant content, it's appended via " | "
+ *        (e.g. M76A with desc "(Floresti)" -> "Metropolitan |
+ *        Floresti"). School is NOT a tag, so a school-only route
+ *        (TE1) falls through to the un-tagged branch.
+ *      - Un-tagged case: `route_desc` is the cleaned desc (if unique
+ *        info), or the parenthetical, or ''. As before.
+ *      - **Empty-desc fallback**: if the original strategy produced
+ *        an empty `route_desc` AND the route has a meaningful
+ *        classification (school network, or any tag), fill it with
+ *        the labels list (network + tag labels), omitting "Normal".
+ *        This is what surfaces "Transport Elevi" for TE routes
+ *        (school network, no tag, no cleaned desc, no parenthetical).
+ *        Regular urban routes (no tag, normal network) get an empty
+ *        desc -- the "Normal" label is omitted because it adds
+ *        noise without information.
  *
- * **1:many semantics** live in `route_desc` (the comma-joined label
- * list, which can carry both the 1 network entry AND multiple tag
- * labels). `route_networks.txt` is 1:1 by `route_id` per the public
- * GTFS spec.
+ * **1:many semantics** live in `route_desc` (the comma-joined tag
+ * label list). `route_networks.txt` is 1:1 by `route_id` per the
+ * public GTFS spec.
  *
  * @param {{
  *   routes: Array<Pick<RouteRow, 'route_id' | 'route_short_name' | 'route_long_name' | 'route_desc'>>,
@@ -800,48 +805,44 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
       return true;
     });
 
-    // The label list is [network label, ...tag labels]. The network
-    // label is always present (every route has a network); tag
-    // labels are appended in CATEGORIES declaration order when the
-    // route matches >=1 tag pattern.
-    const labels = [network.label, ...tags.map((t) => t.label)];
-    const labelsStr = labels.join(', ');
-
+    // "Don't override good data" -- the original "preserve good data"
+    // desc strategy takes priority. The new-model classification is
+    // an ADDITIVE surface -- it only fills in route_desc when the
+    // original strategy produced an empty string. The empty-desc
+    // fallback (below) handles the "route has a classification but
+    // no good desc to surface" case (TE1, ELEVI-99, ...).
     if (tags.length > 0) {
-      // Tagged. `route_desc` is the network + tag labels (comma-
-      // joined). Append captured parenthetical content when it
-      // provides non-redundant info. e.g. an M76A whose desc ends
-      // in "(Floresti)" -> "Normal, Metropolitan | Floresti", so
-      // riders see which commune the route serves.
+      // Tagged. Base = comma-joined tag labels (CATEGORIES order).
+      // Append captured parenthetical content when it provides
+      // non-redundant info. School is not a tag, so a school-route
+      // with no tag falls through to the un-tagged branch below.
+      const base = tags.map((t) => t.label).join(', ');
       if (dedupedStripped.length > 0) {
-        row.route_desc = `${labelsStr} | ${dedupedStripped.join(', ')}`;
+        row.route_desc = `${base} | ${dedupedStripped.join(', ')}`;
         descFromStrippedCount++;
       } else {
-        row.route_desc = labelsStr;
+        row.route_desc = base;
       }
     } else {
-      // Un-tagged. The network label is still the base. Append
-      // cleaned desc or parenthetical content when either carries
-      // unique info.
+      // Un-tagged. Build desc from three sources, in priority order:
       //
-      //   a) Cleaned desc -- if Tranzy's desc had unique info beyond
-      //      what was in long_name (e.g. D51's "P-ta Mihai Viteazu -
-      //      Gilau" -- long_name is just "D51" the code), the desc
-      //      goes after the network label via " | ".
-      //
-      //   b) Stripped parenthetical content (title-cased) -- the
-      //      "exact mirror" case. When the long_name had "(traseu M21)"
+      //   a) Stripped parenthetical content (title-cased) -- the "exact
+      //      mirror" Marius wants. When the long_name had "(traseu M21)"
       //      appended and Tranzy duplicated the same content in desc,
       //      after cleanup both fields have the same "Start - End"
       //      text. The parenthetical content is the only signal that's
-      //      NOT in long_name, so it joins the network label via " | ".
+      //      NOT in long_name, so it goes to desc.
       //
-      //   c) Network label only -- a regular urban route (no tags,
-      //      no parenthetical, no useful desc) ends up with
-      //      `route_desc = "Normal"`. The operator identity signal
-      //      is still surfaced, even though no other classification
-      //      applies.
+      //   b) Cleaned desc -- if Tranzy's desc had unique info beyond
+      //      what was in long_name (e.g. D51's "P-ta Mihai Viteazu -
+      //      Gilau"), use it. Combined with stripped content via " | "
+      //      when both contribute unique info.
       //
+      //   c) Fallback mirror -- when neither (a) nor (b) has unique
+      //      info, desc = cleanedDesc (which equals cleanedLongName).
+      //      Mostly cosmetic; preserves the "desc is a mirror of
+      //      long_name" behavior for routes where Tranzy duplicated
+      //      the same string in both fields.
       // Structural check: get the route's actual stop names so the stale
       // variant detector can verify the desc's terminal actually
       // appears on this route's pattern (not just "trustable enough"
@@ -859,24 +860,25 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
       if (descHasUniqueInfo) {
         // cleaned desc has info not in long_name.
         if (dedupedStripped.length > 0) {
-          row.route_desc = `${labelsStr} | ${cleanedDesc} | ${dedupedStripped.join(', ')}`;
+          row.route_desc = `${cleanedDesc} | ${dedupedStripped.join(', ')}`;
           descFromCleanedCount++;
           descFromStrippedCount++;
         } else {
-          row.route_desc = `${labelsStr} | ${cleanedDesc}`;
+          row.route_desc = cleanedDesc;
           descFromCleanedCount++;
         }
       } else if (dedupedStripped.length > 0) {
         // cleaned desc is just a mirror of long_name (or a stale
         // long_name variant) -- surface the parenthetical content as
         // the unique signal.
-        row.route_desc = `${labelsStr} | ${dedupedStripped.join(', ')}`;
+        row.route_desc = dedupedStripped.join(', ');
         descFromStrippedCount++;
       } else {
-        // No unique info from desc or parenthetical. Just the network
-        // label. This is the common case for regular urban routes --
-        // `route_desc = "Normal"`.
-        row.route_desc = labelsStr;
+        // cleaned desc mirrors long_name and there's no parenthetical
+        // content to surface -- leave route_desc empty. The empty-
+        // desc fallback (below) handles the "route has a
+        // classification but no good desc" case.
+        row.route_desc = '';
       }
 
       // Operator-visibility log: desc was preserved (terminal IS on
@@ -923,6 +925,30 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
             }
           }
         }
+      }
+    }
+
+    // Empty-desc fallback. If the original desc strategy above left
+    // route_desc empty AND the route has a meaningful classification
+    // (school network, or any tag), fill it with the labels list
+    // (network + tag labels), omitting "Normal".
+    //
+    // Why this exists: a school-route like TE1 has tags=[] and no
+    // cleaned desc / parenthetical to surface. The school designation
+    // is in route_networks.txt (the structured join), but the human-
+    // readable route_desc would otherwise be empty -- losing the
+    // operator-identity signal. The fallback restores it.
+    //
+    // Why "omit Normal": the normal network is the catch-all for
+    // un-classified routes. Surfacing "Normal" on every regular urban
+    // route's route_desc would be noise without information (regular
+    // urban routes are most of the feed). The fallback only fires
+    // for routes with a real classification -- school, or any tag.
+    if (!row.route_desc) {
+      const labels = [network.label, ...tags.map((t) => t.label)];
+      const filtered = labels.filter((l) => l !== 'Normal');
+      if (filtered.length > 0) {
+        row.route_desc = filtered.join(', ');
       }
     }
   }
