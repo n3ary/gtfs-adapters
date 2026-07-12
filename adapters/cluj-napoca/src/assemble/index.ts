@@ -26,6 +26,7 @@ import { runDataQualityChecks } from './check/data-quality.ts';
 import { tranzyPatternsByRouteDir, seedPatternsByRouteDir } from './derive/patterns.ts';
 import { reconcileTranzyFallback } from './emit/tranzy-fallback.ts';
 import { buildNetworks, formatNetworkUsageSummary } from './emit/networks.ts';
+import { buildRouteTags, formatRouteTagsSummary } from './emit/routeTags.ts';
 import { applyRouteCategory } from './merge/routeCategory.ts';
 import { warnMsg, info } from '../lib/log-severity.ts';
 
@@ -179,7 +180,7 @@ export async function reconcile({ seed, tranzy, csv, options = {} }) {
   //     (a route can carry multiple tags).
   // The orchestrator consumes the maps directly; no `route_desc`
   // roundtrip needed.
-  const { routeNetworks, networkCounts } = applyRouteCategory({
+  const { routeNetworks, routeTags, networkCounts } = applyRouteCategory({
     routes,
     allStopTimeRows,
     tripToRoute,
@@ -204,6 +205,20 @@ export async function reconcile({ seed, tranzy, csv, options = {} }) {
     warnings.push(info(`networks: ${formatNetworkUsageSummary(networkUsage)}`));
   }
 
+  // _route_tags producer extension (issue #25) — full n:m route→tag
+  // mapping. The public `route_networks.txt` is 1:1 by `route_id`
+  // (priority-pick); the n:m membership lives here. The orchestrator
+  // emits the CSV in the zip AND the cluj adapter's `staticExtension`
+  // registers the matching SQLite table (DDL in the adapter, Option 2
+  // of the issue's open question). See
+  // `docs/quirks-and-rules.md` "Route taxonomy surfaces" for the
+  // full four-surface contract.
+  const routeTagsTxt = buildRouteTags(routeTags);
+  const routeTagsSummary = formatRouteTagsSummary(routeTags);
+  if (routeTagsSummary) {
+    warnings.push(info(`_route_tags: ${routeTagsSummary} -- see _route_tags.txt + route_networks.txt (1:1 priority-pick)`));
+  }
+
   // All `*ToTxt` writers are async since they go through the spec's
   // serializeRows helper (which dynamic-imports csv-stringify/sync).
   // Promise.all keeps the writes concurrent — each writer hits a
@@ -220,6 +235,12 @@ export async function reconcile({ seed, tranzy, csv, options = {} }) {
     'frequencies.txt': await frequenciesToTxt(frequencyRows),
     'networks.txt': networksTxt,
     'route_networks.txt': routeNetworksTxt,
+    // Producer extension (issue #25) -- full n:m route->tag mapping.
+    // Lives next to the public networks.txt + route_networks.txt so
+    // operators see the surfaces together when they unzip the
+    // feed. Dropped from the zip when empty (see the empty-string
+    // filter below).
+    '_route_tags.txt': routeTagsTxt,
     'feed_info.txt': feedInfoTxt({
       buildDate: options.buildDate ?? new Date(),
       startDate: calendarRows[0]?.start_date,
