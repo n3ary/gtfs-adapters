@@ -45,7 +45,7 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
       route_short_name: 'M76A',
       route_long_name: 'TE2 Floresti str. Somesului',
     });
-    expect(r1).toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin' }]);
+    expect(r1).toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' }]);
     expect(classifyNetwork({
       route_short_name: 'M76A',
       route_long_name: 'TE2 Floresti str. Somesului',
@@ -55,7 +55,7 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
       route_short_name: 'M75B',
       route_long_name: 'TE1F',
     });
-    expect(r2).toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin' }]);
+    expect(r2).toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' }]);
     expect(classifyNetwork({
       route_short_name: 'M75B',
       route_long_name: 'TE1F',
@@ -93,7 +93,7 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
       route_desc: 'Untold',
     });
     // Only festival is a tag; school is a network.
-    expect(result).toEqual([{ id: 'festival', label: 'Untold', priority: 3, icon: 'music' }]);
+    expect(result).toEqual([{ id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' }]);
     // School is a network classification.
     expect(classifyNetwork({
       route_short_name: 'X1',
@@ -104,7 +104,7 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
 
   it('classifies *U suffix + "(untold)" annotation as "Untold"', () => {
     expect(classifyRoute({ route_short_name: '30U', route_long_name: 'Grigorescu - IRA' }))
-      .toEqual([{ id: 'festival', label: 'Untold', priority: 3, icon: 'music' }]);
+      .toEqual([{ id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' }]);
     // M26U is also metroline (M* prefix) -> 1:many. With the
     // reordered TAGS (everyday-first), metroline (priority 1)
     // comes before festival (priority 3).
@@ -112,31 +112,31 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
       route_short_name: 'M26U',
       route_long_name: 'Uzinei Electrice - Floresti / Cetate (untold)',
     })).toEqual([
-      { id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin' },
-      { id: 'festival', label: 'Untold', priority: 3, icon: 'music' },
+      { id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' },
+      { id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' },
     ]);
     expect(classifyRoute({ route_short_name: '30U', route_long_name: 'Grigorescu - IRA Untold' }))
-      .toEqual([{ id: 'festival', label: 'Untold', priority: 3, icon: 'music' }]);
+      .toEqual([{ id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' }]);
     expect(classifyRoute({ route_short_name: '99', route_long_name: '', route_desc: 'Untold festival' }))
-      .toEqual([{ id: 'festival', label: 'Untold', priority: 3, icon: 'music' }]);
+      .toEqual([{ id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' }]);
   });
 
   it('classifies *N suffix + "Noapte" long_name as "Noapte"', () => {
     expect(classifyRoute({ route_short_name: '25N', route_long_name: 'Str. Bucium - Str. Unirii' }))
-      .toEqual([{ id: 'night', label: 'Noapte', priority: 0, icon: 'moon' }]);
+      .toEqual([{ id: 'night', label: 'Noapte', priority: 0, icon: 'moon', color: '1A1F36' }]);
     expect(classifyRoute({ route_short_name: '5N', route_long_name: 'Noapte Traian Vuia' }))
-      .toEqual([{ id: 'night', label: 'Noapte', priority: 0, icon: 'moon' }]);
+      .toEqual([{ id: 'night', label: 'Noapte', priority: 0, icon: 'moon', color: '1A1F36' }]);
     expect(classifyRoute({ route_short_name: '99', route_long_name: '', route_desc: 'Noapte special' }))
-      .toEqual([{ id: 'night', label: 'Noapte', priority: 0, icon: 'moon' }]);
+      .toEqual([{ id: 'night', label: 'Noapte', priority: 0, icon: 'moon', color: '1A1F36' }]);
   });
 
   it('classifies A1 / Aeroport long_name as "Aeroport Expres"', () => {
     expect(classifyRoute({ route_short_name: 'A1', route_long_name: 'Piata Mihai Viteazu - Aeroport' }))
-      .toEqual([{ id: 'airport', label: 'Aeroport Expres', priority: 2, icon: 'plane' }]);
+      .toEqual([{ id: 'airport', label: 'Aeroport Expres', priority: 2, icon: 'plane', color: '0EA5E9' }]);
     expect(classifyRoute({ route_short_name: '99', route_long_name: 'Some Route Aeroport Expres' }))
-      .toEqual([{ id: 'airport', label: 'Aeroport Expres', priority: 2, icon: 'plane' }]);
+      .toEqual([{ id: 'airport', label: 'Aeroport Expres', priority: 2, icon: 'plane', color: '0EA5E9' }]);
     expect(classifyRoute({ route_short_name: '99', route_long_name: '', route_desc: 'aeroport shuttle' }))
-      .toEqual([{ id: 'airport', label: 'Aeroport Expres', priority: 2, icon: 'plane' }]);
+      .toEqual([{ id: 'airport', label: 'Aeroport Expres', priority: 2, icon: 'plane', color: '0EA5E9' }]);
   });
 
   it('does NOT classify D51 as commuter (D51 is employee-only / convention, not public commuter)', () => {
@@ -146,16 +146,16 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
 
   it('classifies M* (non-school) as "Metropolitan"', () => {
     expect(classifyRoute({ route_short_name: 'M11', route_long_name: 'P-ta Cipariu - Feleacu' }))
-      .toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin' }]);
+      .toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' }]);
     expect(classifyRoute({ route_short_name: 'M26', route_long_name: 'Floresti - Cluj Napoca' }))
-      .toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin' }]);
+      .toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' }]);
   });
 
   it('classifies CS as "Cursa Speciala"', () => {
     expect(classifyRoute({ route_short_name: 'CS', route_long_name: 'CURSA SPECIALA' }))
-      .toEqual([{ id: 'special', label: 'Cursa Speciala', priority: 4, icon: 'zap' }]);
+      .toEqual([{ id: 'special', label: 'Cursa Speciala', priority: 4, icon: 'zap', color: 'C2410C' }]);
     expect(classifyRoute({ route_short_name: 'CS', route_long_name: '', route_desc: 'CURSA SPECIALA' }))
-      .toEqual([{ id: 'special', label: 'Cursa Speciala', priority: 4, icon: 'zap' }]);
+      .toEqual([{ id: 'special', label: 'Cursa Speciala', priority: 4, icon: 'zap', color: 'C2410C' }]);
   });
 
   it('returns 1:many tag list for routes that match multiple tags (festival + metroline)', () => {
@@ -170,8 +170,8 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
       route_desc: 'Untold',
     });
     expect(result).toEqual([
-      { id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin' },
-      { id: 'festival', label: 'Untold', priority: 3, icon: 'music' },
+      { id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' },
+      { id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' },
     ]);
   });
 
@@ -239,6 +239,34 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
       const result = classifyRoute(row);
       expect(result.length).toBe(1);
       expect(result[0]?.icon).toBe(expectedIcons[tag]);
+    }
+  });
+
+  it('stamps the color field on every tag entry (6-char hex, consumer-renderable)', () => {
+    // The color field is part of the classifyRoute contract: every
+    // tag returned carries the 6-char hex declared in TAGS. The app
+    // reads it to bind to the chip's `hex` prop; the adapter owns
+    // the tag-to-color mapping (one place to update when a new tag
+    // ships). Hand-picked per tag (NOT derived from route modal
+    // hue — tag color is brand identity, not aggregate signal).
+    const expectedColors: Record<string, string> = {
+      night: '1A1F36',      // dark navy (TfL Night Bus Blue convention)
+      metroline: '2E7D5B',  // forest green (suburban/leafy convention)
+      airport: '0EA5E9',    // sky blue (aviation convention; lighter than night)
+      festival: '7B1FA2',   // deep magenta-purple (Untold brand)
+      special: 'C2410C',    // burnt orange (one-off accent)
+    };
+    const inputs: Array<{ tag: string; row: Parameters<typeof classifyRoute>[0] }> = [
+      { tag: 'special',  row: { route_short_name: 'CS', route_long_name: 'Cursa speciala X', route_desc: '' } },
+      { tag: 'festival', row: { route_short_name: '30U', route_long_name: 'Floresti - Centru (untold)', route_desc: '' } },
+      { tag: 'night',    row: { route_short_name: '25N', route_long_name: 'str. X - str. Y (noapte)', route_desc: '' } },
+      { tag: 'airport',  row: { route_short_name: 'A5',  route_long_name: 'Piata Garii - Aeroport',     route_desc: '' } },
+      { tag: 'metroline',row: { route_short_name: 'M26', route_long_name: 'M26 Floresti - Centru',       route_desc: '' } },
+    ];
+    for (const { tag, row } of inputs) {
+      const result = classifyRoute(row);
+      expect(result.length).toBe(1);
+      expect(result[0]?.color).toBe(expectedColors[tag]);
     }
   });
 
@@ -769,7 +797,7 @@ describe('applyRouteCategory -- desc strategy + empty-desc fallback', () => {
     // / night / airport (all priority 0), so consumers sorting
     // by priority got no signal. Issue #25 follow-up.
     expect(result.routeTags.get('144')).toEqual([
-      { id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin' },
+      { id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' },
     ]);
     // long_name falls back to cleaned desc (parenthetical preserved).
     expect(routes[0].route_long_name).toBe('Avram Iancu (Floresti) - Liceul DumitruTautan');
@@ -1012,7 +1040,7 @@ describe('applyRouteCategory -- desc strategy + empty-desc fallback', () => {
     // index was 0 for any 1:1 route, which made all 1:1 tags
     // indistinguishable when sorted by priority.
     expect(result.routeTags.get('M75B')).toEqual([
-      { id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin' },
+      { id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' },
     ]);
     // Tag label + non-redundant parenthetical joined with " | ".
     expect(routes[0].route_desc).toBe('Metropolitan | Floresti');
@@ -1039,7 +1067,7 @@ describe('getAllCategories / getAllTags / getAllNetworks -- surface accessors', 
     expect(all.slice(TAGS.length).map((c) => c.id)).toEqual(NETWORKS.map((c) => c.id));
   });
 
-  it('getAllTags returns the tag list (no `surface` discriminator, has `icon`)', () => {
+  it('getAllTags returns the tag list (no `surface` discriminator, has `icon` and `color`)', () => {
     const tags = getAllTags();
     const tagIds = tags.map((c) => c.id);
     expect(tagIds).toEqual(['night', 'metroline', 'airport', 'festival', 'special']);
@@ -1047,6 +1075,11 @@ describe('getAllCategories / getAllTags / getAllNetworks -- surface accessors', 
       expect(t.id).toBeDefined();
       expect(t.label).toBeDefined();
       expect(typeof t.icon).toBe('string');
+      // 6-char hex, uppercase, no leading #. Hand-picked per tag in
+      // routeCategory.ts TAGS -- the contract that the app binds to
+      // its chip's `hex` prop.
+      expect(typeof t.color).toBe('string');
+      expect(t.color).toMatch(/^[0-9A-F]{6}$/);
     }
   });
 

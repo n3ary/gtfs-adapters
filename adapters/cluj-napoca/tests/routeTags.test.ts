@@ -27,17 +27,17 @@ describe('buildRouteTags — _route_tags producer extension', () => {
 
   it('emits the CSV header + one row per (tag_id, route_id) for 1:1 routes', () => {
     const routeTags = new Map();
-    routeTags.set('93', [{ id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap' }]);
-    routeTags.set('15', [{ id: 'night', label: 'Noapte', priority: 3, icon: 'moon' }]);
+    routeTags.set('93', [{ id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap', color: '8B5CF6' }]);
+    routeTags.set('15', [{ id: 'night', label: 'Noapte', priority: 3, icon: 'moon', color: '1A1F36' }]);
     const csv = buildRouteTags(routeTags);
     const lines = csv.trim().split('\n');
     // Header + 2 rows.
     expect(lines.length).toBe(3);
-    expect(lines[0]).toBe('tag_id,route_id,tag_label,priority,icon');
+    expect(lines[0]).toBe('tag_id,route_id,tag_label,priority,icon,color');
     // Rows are sorted by (route_id, priority) — see the next test for
     // sort behavior. The first row alphabetically is route '15'.
-    expect(lines[1]).toBe('night,15,Noapte,3,moon');
-    expect(lines[2]).toBe('school,93,Transport Elevi,1,graduation-cap');
+    expect(lines[1]).toBe('night,15,Noapte,3,moon,1A1F36');
+    expect(lines[2]).toBe('school,93,Transport Elevi,1,graduation-cap,8B5CF6');
   });
 
   it('emits one row per (tag_id, route_id) for 1:many routes (n:m)', () => {
@@ -46,17 +46,17 @@ describe('buildRouteTags — _route_tags producer extension', () => {
     // the priority-pick (which is what `route_networks.txt` carries).
     const routeTags = new Map();
     routeTags.set('26', [
-      { id: 'festival', label: 'Untold', priority: 2, icon: 'music' },
-      { id: 'metroline', label: 'Metropolitan', priority: 5, icon: 'map-pin' },
+      { id: 'festival', label: 'Untold', priority: 2, icon: 'music', color: '7B1FA2' },
+      { id: 'metroline', label: 'Metropolitan', priority: 5, icon: 'map-pin', color: '2E7D5B' },
     ]);
     const csv = buildRouteTags(routeTags);
     const lines = csv.trim().split('\n');
     expect(lines.length).toBe(3);
-    expect(lines[0]).toBe('tag_id,route_id,tag_label,priority,icon');
+    expect(lines[0]).toBe('tag_id,route_id,tag_label,priority,icon,color');
     // 1:many route's rows are in TAGS declaration order
     // (priority ascending). festival is index 2, metroline is index 5.
-    expect(lines[1]).toBe('festival,26,Untold,2,music');
-    expect(lines[2]).toBe('metroline,26,Metropolitan,5,map-pin');
+    expect(lines[1]).toBe('festival,26,Untold,2,music,7B1FA2');
+    expect(lines[2]).toBe('metroline,26,Metropolitan,5,map-pin,2E7D5B');
   });
 
   it('emits rows sorted by (route_id, priority) for diff stability', () => {
@@ -65,19 +65,19 @@ describe('buildRouteTags — _route_tags producer extension', () => {
     // order, and we don't want re-orderings of the input to cause
     // spurious CSV diffs. The sort is part of the contract.
     const routeTags = new Map();
-    routeTags.set('Z', [{ id: 'metroline', label: 'Metropolitan', priority: 5, icon: 'map-pin' }]);
-    routeTags.set('A', [{ id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap' }]);
+    routeTags.set('Z', [{ id: 'metroline', label: 'Metropolitan', priority: 5, icon: 'map-pin', color: '2E7D5B' }]);
+    routeTags.set('A', [{ id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap', color: '8B5CF6' }]);
     routeTags.set('M', [
-      { id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap' },
-      { id: 'metroline', label: 'Metropolitan', priority: 5, icon: 'map-pin' },
+      { id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap', color: '8B5CF6' },
+      { id: 'metroline', label: 'Metropolitan', priority: 5, icon: 'map-pin', color: '2E7D5B' },
     ]);
     const csv = buildRouteTags(routeTags);
     const lines = csv.trim().split('\n');
-    expect(lines[0]).toBe('tag_id,route_id,tag_label,priority,icon');
-    expect(lines[1]).toBe('school,A,Transport Elevi,1,graduation-cap');
-    expect(lines[2]).toBe('school,M,Transport Elevi,1,graduation-cap');
-    expect(lines[3]).toBe('metroline,M,Metropolitan,5,map-pin');
-    expect(lines[4]).toBe('metroline,Z,Metropolitan,5,map-pin');
+    expect(lines[0]).toBe('tag_id,route_id,tag_label,priority,icon,color');
+    expect(lines[1]).toBe('school,A,Transport Elevi,1,graduation-cap,8B5CF6');
+    expect(lines[2]).toBe('school,M,Transport Elevi,1,graduation-cap,8B5CF6');
+    expect(lines[3]).toBe('metroline,M,Metropolitan,5,map-pin,2E7D5B');
+    expect(lines[4]).toBe('metroline,Z,Metropolitan,5,map-pin,2E7D5B');
   });
 
   it('preserves tag_label verbatim in the row (denormalized for fast reads)', () => {
@@ -85,34 +85,34 @@ describe('buildRouteTags — _route_tags producer extension', () => {
     // human label — the row carries the label as a producer
     // convenience. Pin the verbatim copy.
     const routeTags = new Map();
-    routeTags.set('R', [{ id: 'festival', label: 'Untold', priority: 2, icon: 'music' }]);
+    routeTags.set('R', [{ id: 'festival', label: 'Untold', priority: 2, icon: 'music', color: '7B1FA2' }]);
     const csv = buildRouteTags(routeTags);
     const lines = csv.trim().split('\n');
-    expect(lines[1]).toBe('festival,R,Untold,2,music');
+    expect(lines[1]).toBe('festival,R,Untold,2,music,7B1FA2');
   });
 
-  it('pins the CSV header order: tag_id, route_id, tag_label, priority, icon', () => {
+  it('pins the CSV header order: tag_id, route_id, tag_label, priority, icon, color', () => {
     // Column order is part of the producer-extension contract (the
     // spec doesn't define it). Consumers (e.g. neary's chip
     // rendering) parse by column name, but the order matters for
     // human readers + downstream SQLite imports. Pin it.
     const routeTags = new Map();
-    routeTags.set('R', [{ id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap' }]);
+    routeTags.set('R', [{ id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap', color: '8B5CF6' }]);
     const csv = buildRouteTags(routeTags);
-    expect(csv).toMatch(/^tag_id,route_id,tag_label,priority,icon\n/);
+    expect(csv).toMatch(/^tag_id,route_id,tag_label,priority,icon,color\n/);
   });
 
-  it('omits icon column when the tag has no icon (defensive: empty string)', () => {
-    // A future tag entry without an `icon` field should not crash
-    // the emitter and should produce an empty cell. Pin the
-    // column-count + non-crash contract; the empty cell is the
-    // signal to the consumer to fall back to its default icon.
+  it('omits icon and color columns when the tag has neither (defensive: empty strings)', () => {
+    // A future tag entry without `icon` or `color` fields should
+    // not crash the emitter and should produce empty cells. Pin
+    // the column-count + non-crash contract; the empty cells are
+    // the signal to the consumer to fall back to its defaults.
     const routeTags = new Map();
     routeTags.set('R', [{ id: 'festival', label: 'Untold', priority: 2 }]);
     const csv = buildRouteTags(routeTags);
     const lines = csv.trim().split('\n');
-    expect(lines[0]).toBe('tag_id,route_id,tag_label,priority,icon');
-    expect(lines[1]).toBe('festival,R,Untold,2,');
+    expect(lines[0]).toBe('tag_id,route_id,tag_label,priority,icon,color');
+    expect(lines[1]).toBe('festival,R,Untold,2,,');
   });
 });
 

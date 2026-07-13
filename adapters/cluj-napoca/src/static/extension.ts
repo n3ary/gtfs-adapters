@@ -210,6 +210,7 @@ export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticEx
           ['tag_label', 'TEXT'],
           ['priority', 'INTEGER'],
           ['icon', 'TEXT'],
+          ['color', 'TEXT'],
         ],
         // Coerce the raw CSV rows (which arrive as `Record<string, string>`
         // from the orchestrator's generic CSV reader) into the typed
@@ -220,7 +221,13 @@ export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticEx
         // malformed emit is loud failure not silent data loss).
         // `icon` is the lucide-svelte slug the consumer renders in
         // the tag chip; owned by the adapter's `routeCategory.TAGS`,
-        // not the consumer.
+        // not the consumer. `color` is the 6-char uppercase hex the
+        // consumer renders as the chip background; same shape of
+        // ownership + string-presence coercion as `icon` (no
+        // normalizeColor / KNOWN_PLACEHOLDER_COLORS — producer-
+        // extension values are stored verbatim from the adapter's
+        // own emit, so the adapter is responsible for valid values
+        // upstream).
         rows: feedConfig.routeTags && feedConfig.routeTags.length > 0
           ? feedConfig.routeTags.map((r) => {
               const priorityRaw = r.priority?.trim() ?? '';
@@ -231,6 +238,7 @@ export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticEx
                 tag_label: r.tag_label && r.tag_label.length > 0 ? r.tag_label : null,
                 priority: priorityNum !== null && Number.isFinite(priorityNum) ? priorityNum : null,
                 icon: r.icon && r.icon.length > 0 ? r.icon : null,
+                color: r.color && r.color.length > 0 ? r.color : null,
               };
             })
           : [],

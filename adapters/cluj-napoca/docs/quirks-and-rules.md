@@ -359,7 +359,7 @@ consumers.
 | `routes.route_desc` (tagged) | `applyRouteCategory` -> comma-joined tag labels | n:m | All matching tag labels, comma-joined (e.g. `"Metropolitan, Untold"` for an M26U) |
 | `networks.txt` `network_name` | the matched network's `label` | 1 per used network | Same string as `networks.txt` `network_name` |
 | `route_networks.txt` (public) | `applyRouteCategory.routeNetworks` (1 network per route) | 1:1 by `route_id` | `(network_id, route_id)` — every route is in exactly one of `school` or `normal` |
-| `_route_tags` (producer extension, issue #25) | `applyRouteCategory.routeTags` (all matching tags) | n:m | `(tag_id, route_id, tag_label, priority, icon)` |
+| `_route_tags` (producer extension, issue #25) | `applyRouteCategory.routeTags` (all matching tags) | n:m | `(tag_id, route_id, tag_label, priority, icon, color)` |
 
 ### Why 1:many tags diverge from the 1:1 network surface
 
@@ -406,6 +406,7 @@ CREATE TABLE _route_tags (
   tag_label TEXT,
   priority  INTEGER,
   icon      TEXT,
+  color     TEXT,
   PRIMARY KEY (tag_id, route_id)
 ) WITHOUT ROWID;
 ```
@@ -418,7 +419,12 @@ lucide-svelte slug the consumer renders in the tag chip — owned
 by the adapter (the `TAGS` array in `routeCategory.ts`), not
 hardcoded in the app. Empty string when the tag has no icon
 declared; the app falls back to its `Star` default in that
-case.
+case. `color` is the 6-char uppercase hex (no leading `#`) the
+consumer renders as the tag chip background — hand-picked per
+tag in the adapter (not derived from route modal hue; tag
+color is brand identity, not aggregate signal). Empty string
+when the tag has no color declared; the app falls back to its
+default chip color.
 
 ### Priority-first consistency check
 
@@ -465,6 +471,12 @@ TAGS array (1:many per route; drives route_desc + _route_tags):
   consumer. Mapping: night=moon, metroline=map-pin, airport=
   plane, festival=music, special=zap. Adding a new tag means
   a single edit in TAGS.
+  Each tag also carries a `color` (6-char hex) for the chip
+  background -- hand-picked per tag, not derived from route
+  modal hue (tag color is brand identity, not aggregate
+  signal). Mapping: night=#1A1F36, metroline=#2E7D5B,
+  airport=#0EA5E9, festival=#7B1FA2, special=#C2410C. All
+  five are dark enough for white text via `networkTextColor`.
   Order = "every-day first, event overlays after"; consumers
   sort by priority ASCENDING for badge rendering.
 
@@ -474,9 +486,11 @@ NETWORKS array (1:1 per route; drives networks.txt +
   ^ priority-pick order: networks are walked in array
     order; first non-`normal` match wins, `normal` is the
     fallback for every other route.
-  Networks deliberately have no `icon` field -- the app
-  renders network chips as color + label only. TAGS carry
-  icons; NETWORKS don't.
+  Networks deliberately have no `icon` or `color` field --
+    the app renders network chips as color + label only
+    (color comes from `computeNetworkColors`, the route-modal
+    derivation in `static/route-colors.ts`). TAGS carry icons
+    + chip colors; NETWORKS get derived colors at runtime.
             |
             v
 applyRouteCategory(routes, ...)
@@ -487,7 +501,7 @@ applyRouteCategory(routes, ...)
    5. set route_desc = comma-joined tag labels (tagged)
       or cleaned desc (un-tagged) or '' (no unique info)
    6. return routeNetworks: Map<route_id, {id, label}>
-      AND routeTags: Map<route_id, [{id, label, priority, icon}]>
+      AND routeTags: Map<route_id, [{id, label, priority, icon, color}]>
             |
             +--> buildNetworks(routes, routeNetworks)
             |       -> networks.txt (school + normal)

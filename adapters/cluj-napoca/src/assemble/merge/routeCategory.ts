@@ -92,7 +92,7 @@ import { terminalNamesMatch, normalizeStopName } from '../emit/trips.ts';
  * TAGS: route service-class taxonomy (1:many per route, drives
  * `route_desc` + the producer-extension `_route_tags` table).
  *
- * Each entry: `{ id, label, icon, match(s, l, d) }` where
+ * Each entry: `{ id, label, icon, color, match(s, l, d) }` where
  *
  *   - `id` is the machine-readable tag_id.
  *   - `label` is the human-readable string (one entry of the
@@ -104,6 +104,16 @@ import { terminalNamesMatch, normalizeStopName } from '../emit/trips.ts';
  *     The names are the lucide slugs in `kebab-case` minus the
  *     `lucide-` brand prefix (e.g. `moon`, `map-pin`, `plane`,
  *     `music`, `zap`).
+ *   - `color` is the 6-char uppercase hex (no leading `#`) the
+ *     consumer renders as the tag chip background. Hand-picked per
+ *     tag (NOT derived from route modal hue — tag color is brand
+ *     identity, not aggregate signal). The night/airport split
+ *     (very-dark-navy vs sky-blue) keeps the two blues perceptually
+ *     distinct; the festival color sits in the brand-purple family
+ *     deliberately so it reads as "Untold"; special gets burnt
+ *     orange as a one-off accent. All 5 colors are dark enough for
+ *     white text (`networkTextColor` returns `#000` only above L=0.6
+ *     in `pickContrastingText`).
  *   - `match` is a predicate over `(route_short_name, route_long_name,
  *     route_desc)`. We check all three because Tranzy sometimes
  *     carries the signal in just one -- e.g. "(untold)" annotation
@@ -146,6 +156,7 @@ export const TAGS = [
     id: 'night',
     label: 'Noapte',
     icon: 'moon',
+    color: '1A1F36',
     // Night services. Signal is `*N` suffix or "noapte" substring
     // (Romanian for "night"; Tranzy uses "Disp." prefix on headsigns
     // for depot-relative direction, but the long_name/desc sometimes
@@ -159,6 +170,7 @@ export const TAGS = [
     id: 'metroline',
     label: 'Metropolitan',
     icon: 'map-pin',
+    color: '2E7D5B',
     // Cluj-CTP's own term for the suburban/metroline bus network is
     // "Metropolitan" (per ctpcj.ro). Used in the consumer-facing label
     // because that's what riders search for on the agency site.
@@ -168,6 +180,7 @@ export const TAGS = [
     id: 'airport',
     label: 'Aeroport Expres',
     icon: 'plane',
+    color: '0EA5E9',
     match: (s, l, d) =>
       /^A\d/.test(s) ||
       /aeroport/i.test(l) ||
@@ -177,6 +190,7 @@ export const TAGS = [
     id: 'festival',
     label: 'Untold',
     icon: 'music',
+    color: '7B1FA2',
     // Festival services (Untold Music Festival in Cluj). The signal
     // is either:
     //   - `*U` suffix in short_name (`30U`, `M26U`)
@@ -192,6 +206,7 @@ export const TAGS = [
     id: 'special',
     label: 'Cursa Speciala',
     icon: 'zap',
+    color: 'C2410C',
     match: (s, l, d) =>
       s === 'CS' || /CURSA SPECIALA/i.test(l) || /CURSA SPECIALA/i.test(d),
   },
@@ -295,7 +310,7 @@ export const NETWORKS = [
  * network is a network-only surface, not a tag.
  *
  * @param {{ route_short_name?: string, route_long_name?: string, route_desc?: string }} row
- * @returns {Array<{ id: string, label: string, priority: number, icon?: string }>}
+ * @returns {Array<{ id: string, label: string, priority: number, icon?: string, color?: string }>}
  */
 export function classifyRoute(row) {
   const s = (row.route_short_name ?? '').toString();
@@ -315,7 +330,7 @@ export function classifyRoute(row) {
           'TAGS and TAG_INDEX must stay in sync.',
         );
       }
-      matches.push({ id: cat.id, label: cat.label, priority, icon: cat.icon });
+      matches.push({ id: cat.id, label: cat.label, priority, icon: cat.icon, color: cat.color });
     }
   }
   return matches;
@@ -765,7 +780,7 @@ function tagLabelSetLower() {
  *   descFromCleanedCount: number,
  *   descFromStrippedCount: number,
  *   routeNetworks: Map<string, { id: string, label: string }>,
- *   routeTags: Map<string, Array<{ id: string, label: string, priority: number, icon?: string }>>,
+ *   routeTags: Map<string, Array<{ id: string, label: string, priority: number, icon?: string, color?: string }>>,
  * }}
  */
 export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, stopsByStopId, warnings }) {
@@ -783,7 +798,7 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
 
   /** @type {Map<string, { id: string, label: string }>} */
   const routeNetworks = new Map();
-  /** @type {Map<string, Array<{ id: string, label: string, priority: number, icon?: string }>>} */
+  /** @type {Map<string, Array<{ id: string, label: string, priority: number, icon?: string, color?: string }>>} */
   const routeTags = new Map();
 
   for (const row of routes) {
@@ -1072,10 +1087,10 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
  * which tag ids exist for the cluj adapter. For networks, use
  * `getAllNetworks` instead.
  *
- * @returns {Array<{ id: string, label: string, icon?: string }>}
+ * @returns {Array<{ id: string, label: string, icon?: string, color?: string }>}
  */
 export function getAllTags() {
-  return TAGS.map(({ id, label, icon }) => ({ id, label, icon }));
+  return TAGS.map(({ id, label, icon, color }) => ({ id, label, icon, color }));
 }
 
 /**
@@ -1101,11 +1116,11 @@ export function getAllNetworks() {
  * then networks (in `NETWORKS` order), with each entry carrying
  * `surface: 'tag' | 'network'` so consumers can distinguish.
  *
- * @returns {Array<{ id: string, label: string, surface: 'tag' | 'network', icon?: string }>}
+ * @returns {Array<{ id: string, label: string, surface: 'tag' | 'network', icon?: string, color?: string }>}
  */
 export function getAllCategories() {
   return [
-    ...TAGS.map(({ id, label, icon }) => ({ id, label, surface: 'tag', icon })),
+    ...TAGS.map(({ id, label, icon, color }) => ({ id, label, surface: 'tag', icon, color })),
     ...NETWORKS.map(({ id, label }) => ({ id, label, surface: 'network' })),
   ];
 }

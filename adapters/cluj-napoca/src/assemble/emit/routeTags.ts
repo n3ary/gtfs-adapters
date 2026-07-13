@@ -32,6 +32,8 @@
  *     route_id  TEXT NOT NULL,
  *     tag_label TEXT,
  *     priority  INTEGER,
+ *     icon      TEXT,
+ *     color     TEXT,
  *     PRIMARY KEY (tag_id, route_id)
  *   ) WITHOUT ROWID;
  *
@@ -59,10 +61,10 @@
 import { stringify } from 'csv-stringify/sync';
 
 /**
- * @typedef {{ id: string, label: string, priority: number, icon?: string }} RouteTag
+ * @typedef {{ id: string, label: string, priority: number, icon?: string, color?: string }} RouteTag
  */
 
-const ROUTE_TAGS_HEADER = 'tag_id,route_id,tag_label,priority,icon';
+const ROUTE_TAGS_HEADER = 'tag_id,route_id,tag_label,priority,icon,color';
 
 /**
  * Build the CSV body for `_route_tags` from the structured per-route
@@ -89,6 +91,12 @@ const ROUTE_TAGS_HEADER = 'tag_id,route_id,tag_label,priority,icon';
  *     means a single edit in `routeCategory.TAGS`, not a
  *     consumer code change. Empty string when the tag entry has
  *     no icon declared.
+ *   - `color` is the 6-char uppercase hex (no leading `#`) the
+ *     consumer renders as the tag chip background. Hand-picked per
+ *     tag in `routeCategory.TAGS` (NOT derived from route modal
+ *     hue — tag color is brand identity, not aggregate signal).
+ *     Empty string when the tag entry has no color declared; the
+ *     consumer falls back to its default chip color in that case.
  *
  * @param {Map<string, ReadonlyArray<RouteTag>>} routeTags
  *   The per-route tag map from `applyRouteCategory.routeTags`. Routes
@@ -123,17 +131,18 @@ export function buildRouteTags(routeTags) {
     tag.label,
     String(tag.priority),
     tag.icon ?? '',
+    tag.color ?? '',
   ]);
 
   // csv-stringify/sync with explicit `header: false` + manual header
   // line keeps the column order locked to (tag_id, route_id,
-  // tag_label, priority, icon) regardless of object key ordering. We
-  // don't use `serializeRows` here because `_route_tags` is a
-  // producer extension with no spec schema — its column order is
-  // this adapter's contract, not the spec's.
+  // tag_label, priority, icon, color) regardless of object key
+  // ordering. We don't use `serializeRows` here because
+  // `_route_tags` is a producer extension with no spec schema —
+  // its column order is this adapter's contract, not the spec's.
   const body = stringify(rows, {
     header: false,
-    columns: ['tag_id', 'route_id', 'tag_label', 'priority', 'icon'],
+    columns: ['tag_id', 'route_id', 'tag_label', 'priority', 'icon', 'color'],
     record_delimiter: '\n',
   });
   return ROUTE_TAGS_HEADER + '\n' + body;

@@ -32,11 +32,11 @@ const SYNTHETIC_ROUTE_TAGS = [
   // The orchestrator hands the adapter raw CSV rows
   // (`Record<string, string>`); the adapter does the schema coercion
   // in `staticExtension()`.
-  { tag_id: 'night', route_id: 'R1', tag_label: 'Noapte', priority: '3', icon: 'moon' },
+  { tag_id: 'night', route_id: 'R1', tag_label: 'Noapte', priority: '3', icon: 'moon', color: '1A1F36' },
   // R2 matches two tags (1:many) — school + metroline. The
   // extension table's whole point is to carry both rows.
-  { tag_id: 'school', route_id: 'R2', tag_label: 'Transport Elevi', priority: '1', icon: 'graduation-cap' },
-  { tag_id: 'metroline', route_id: 'R2', tag_label: 'Metropolitan', priority: '5', icon: 'map-pin' },
+  { tag_id: 'school', route_id: 'R2', tag_label: 'Transport Elevi', priority: '1', icon: 'graduation-cap', color: '8B5CF6' },
+  { tag_id: 'metroline', route_id: 'R2', tag_label: 'Metropolitan', priority: '5', icon: 'map-pin', color: '2E7D5B' },
 ];
 
 const WORK = join(tmpdir(), `adapter-static-ext-${Date.now()}`);
@@ -208,12 +208,12 @@ describe('staticExtension', () => {
       // rows match the structured input (no reverse-parse, no dedup).
       const tagColumns = db.prepare("PRAGMA table_info('_route_tags')").all() as Array<{ name: string }>;
       const colNames = tagColumns.map((c) => c.name).sort();
-      expect(colNames).toEqual(['icon', 'priority', 'route_id', 'tag_id', 'tag_label']);
-      const tagRows = db.prepare('SELECT tag_id, route_id, tag_label, priority, icon FROM _route_tags ORDER BY route_id, priority').all() as Array<{ tag_id: string; route_id: string; tag_label: string; priority: number; icon: string | null }>;
+      expect(colNames).toEqual(['color', 'icon', 'priority', 'route_id', 'tag_id', 'tag_label']);
+      const tagRows = db.prepare('SELECT tag_id, route_id, tag_label, priority, icon, color FROM _route_tags ORDER BY route_id, priority').all() as Array<{ tag_id: string; route_id: string; tag_label: string; priority: number; icon: string | null; color: string | null }>;
       expect(tagRows).toEqual([
-        { tag_id: 'night', route_id: 'R1', tag_label: 'Noapte', priority: 3, icon: 'moon' },
-        { tag_id: 'school', route_id: 'R2', tag_label: 'Transport Elevi', priority: 1, icon: 'graduation-cap' },
-        { tag_id: 'metroline', route_id: 'R2', tag_label: 'Metropolitan', priority: 5, icon: 'map-pin' },
+        { tag_id: 'night', route_id: 'R1', tag_label: 'Noapte', priority: 3, icon: 'moon', color: '1A1F36' },
+        { tag_id: 'school', route_id: 'R2', tag_label: 'Transport Elevi', priority: 1, icon: 'graduation-cap', color: '8B5CF6' },
+        { tag_id: 'metroline', route_id: 'R2', tag_label: 'Metropolitan', priority: 5, icon: 'map-pin', color: '2E7D5B' },
       ]);
       // 1:many invariant — R2 has 2 rows.
       const r2Count = db.prepare("SELECT COUNT(*) AS c FROM _route_tags WHERE route_id = 'R2'").get() as { c: number };
@@ -232,7 +232,7 @@ describe('staticExtension', () => {
     // _route_tags table is still registered (DDL-only) even with no
     // rows — consumers can `SELECT ... LIMIT 0` without an error.
     expect(ext.tableExtensions?._route_tags?.rows?.length ?? 0).toBe(0);
-    expect(ext.tableExtensions?._route_tags?.columns.length).toBe(5);
+    expect(ext.tableExtensions?._route_tags?.columns.length).toBe(6);
 
     const db = runExtension(ext);
     try {
@@ -258,14 +258,14 @@ describe('staticExtension', () => {
         // Empty string priority + missing tag_label — simulates a
         // CSV row with trailing empty cells. The adapter coerces
         // empty strings to NULL, not crashes on Number('').
-        { tag_id: 'school', route_id: 'R1', tag_label: '', priority: '', icon: '' },
+        { tag_id: 'school', route_id: 'R1', tag_label: '', priority: '', icon: '', color: '' },
       ],
     });
     const db = runExtension(ext);
     try {
-      const rows = db.prepare('SELECT tag_id, route_id, tag_label, priority, icon FROM _route_tags').all() as Array<{ tag_id: string; route_id: string; tag_label: string | null; priority: number | null; icon: string | null }>;
+      const rows = db.prepare('SELECT tag_id, route_id, tag_label, priority, icon, color FROM _route_tags').all() as Array<{ tag_id: string; route_id: string; tag_label: string | null; priority: number | null; icon: string | null; color: string | null }>;
       expect(rows).toEqual([
-        { tag_id: 'school', route_id: 'R1', tag_label: null, priority: null, icon: null },
+        { tag_id: 'school', route_id: 'R1', tag_label: null, priority: null, icon: null, color: null },
       ]);
     } finally {
       db.close();
