@@ -56,7 +56,7 @@ jobs:
         # and goes through PR review. pnpm 11's supply-chain
         # re-verification (which rejects freshly-published internal
         # packages within 24h) is bypassed.
-        uses: n3ary/actions/.github/actions/setup-pnpm-gh-packages-auth@v23
+        uses: n3ary/actions/.github/actions/setup-pnpm-gh-packages-auth@v24
         with:
           auth-token: ${{ secrets.NPM_TOKEN }}
 
