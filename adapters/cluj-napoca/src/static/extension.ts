@@ -209,6 +209,7 @@ export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticEx
           ['route_id', 'TEXT NOT NULL'],
           ['tag_label', 'TEXT'],
           ['priority', 'INTEGER'],
+          ['icon', 'TEXT'],
         ],
         // Coerce the raw CSV rows (which arrive as `Record<string, string>`
         // from the orchestrator's generic CSV reader) into the typed
@@ -217,6 +218,9 @@ export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticEx
         // string or non-numeric value becomes null (the SQLite
         // `INTEGER` column would otherwise reject the row, and a
         // malformed emit is loud failure not silent data loss).
+        // `icon` is the lucide-svelte slug the consumer renders in
+        // the tag chip; owned by the adapter's `routeCategory.CATEGORIES`,
+        // not the consumer.
         rows: feedConfig.routeTags && feedConfig.routeTags.length > 0
           ? feedConfig.routeTags.map((r) => {
               const priorityRaw = r.priority?.trim() ?? '';
@@ -226,6 +230,7 @@ export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticEx
                 route_id: r.route_id ?? '',
                 tag_label: r.tag_label && r.tag_label.length > 0 ? r.tag_label : null,
                 priority: priorityNum !== null && Number.isFinite(priorityNum) ? priorityNum : null,
+                icon: r.icon && r.icon.length > 0 ? r.icon : null,
               };
             })
           : [],

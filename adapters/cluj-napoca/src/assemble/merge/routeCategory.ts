@@ -98,6 +98,14 @@ import { terminalNamesMatch, normalizeStopName } from '../emit/trips.ts';
  *   - `label` is the human-readable string -- for networks it
  *     becomes `networks.txt` `network_name`; for tags it becomes
  *     one entry of the comma-joined `route_desc`.
+ *   - `icon` (tag entries only, optional) is the lucide-svelte
+ *     icon-name string consumers render in the chip. The adapter
+ *     owns the icon-to-tag mapping (one place to update when a
+ *     new tag ships); the app just looks the icon up in a
+ *     registry keyed by this string. The names are the lucide
+ *     slugs in `kebab-case` minus the `lucide-` brand prefix
+ *     (e.g. `moon`, `map-pin`, `plane`, `music`, `zap`). Missing
+ *     `icon` is fine -- the app falls back to a `Star` default.
  *   - `surface` is either `'tag'` (drives `route_desc` labels,
  *     multiple allowed per route) or `'network'` (drives
  *     `networks.txt` + `route_networks.txt`, exactly one per route).
@@ -136,6 +144,7 @@ export const CATEGORIES = [
     id: 'night',
     label: 'Noapte',
     surface: 'tag',
+    icon: 'moon',
     // Night services. Signal is `*N` suffix or "noapte" substring
     // (Romanian for "night"; Tranzy uses "Disp." prefix on headsigns
     // for depot-relative direction, but the long_name/desc sometimes
@@ -149,6 +158,7 @@ export const CATEGORIES = [
     id: 'metroline',
     label: 'Metropolitan',
     surface: 'tag',
+    icon: 'map-pin',
     // Cluj-CTP's own term for the suburban/metroline bus network is
     // "Metropolitan" (per ctpcj.ro). Used in the consumer-facing label
     // because that's what riders search for on the agency site.
@@ -158,6 +168,7 @@ export const CATEGORIES = [
     id: 'airport',
     label: 'Aeroport Expres',
     surface: 'tag',
+    icon: 'plane',
     match: (s, l, d) =>
       /^A\d/.test(s) ||
       /aeroport/i.test(l) ||
@@ -167,6 +178,7 @@ export const CATEGORIES = [
     id: 'festival',
     label: 'Untold',
     surface: 'tag',
+    icon: 'music',
     // Festival services (Untold Music Festival in Cluj). The signal
     // is either:
     //   - `*U` suffix in short_name (`30U`, `M26U`)
@@ -182,6 +194,7 @@ export const CATEGORIES = [
     id: 'special',
     label: 'Cursa Speciala',
     surface: 'tag',
+    icon: 'zap',
     match: (s, l, d) =>
       s === 'CS' || /CURSA SPECIALA/i.test(l) || /CURSA SPECIALA/i.test(d),
   },
@@ -281,7 +294,7 @@ const NETWORK_ENTRIES = CATEGORIES.filter((c) => c.surface === 'network');
  * network is a network-only surface, not a tag.
  *
  * @param {{ route_short_name?: string, route_long_name?: string, route_desc?: string }} row
- * @returns {Array<{ id: string, label: string, priority: number }>}
+ * @returns {Array<{ id: string, label: string, priority: number, icon?: string }>}
  */
 export function classifyRoute(row) {
   const s = (row.route_short_name ?? '').toString();
@@ -301,7 +314,7 @@ export function classifyRoute(row) {
           'TAG_ENTRIES and TAG_INDEX must stay in sync.',
         );
       }
-      matches.push({ id: cat.id, label: cat.label, priority });
+      matches.push({ id: cat.id, label: cat.label, priority, icon: cat.icon });
     }
   }
   return matches;
@@ -751,7 +764,7 @@ function tagLabelSetLower() {
  *   descFromCleanedCount: number,
  *   descFromStrippedCount: number,
  *   routeNetworks: Map<string, { id: string, label: string }>,
- *   routeTags: Map<string, Array<{ id: string, label: string, priority: number }>>,
+ *   routeTags: Map<string, Array<{ id: string, label: string, priority: number, icon?: string }>>,
  * }}
  */
 export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, stopsByStopId, warnings }) {
@@ -769,7 +782,7 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
 
   /** @type {Map<string, { id: string, label: string }>} */
   const routeNetworks = new Map();
-  /** @type {Map<string, Array<{ id: string, label: string, priority: number }>>} */
+  /** @type {Map<string, Array<{ id: string, label: string, priority: number, icon?: string }>>} */
   const routeTags = new Map();
 
   for (const row of routes) {
