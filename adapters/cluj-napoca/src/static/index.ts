@@ -16,6 +16,7 @@
 export {
   staticExtension,
   applyStaticPostLoad,
+  producerExtensions,
   type StaticExtensionFeedConfig,
 } from './extension.ts';
 
