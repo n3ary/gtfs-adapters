@@ -66,9 +66,9 @@
   ],
   "_n3ary_release_bot_skip": {
     "reason": "merge-changed-version",
-    "previous_version": "0.3.38",
-    "current_version": "0.3.39",
-    "merge_sha": "23c698590a3b38340084d5a9acc80fc13a738b8c",
-    "at": "2026-07-13T05:54:45.933Z"
+    "previous_version": "0.3.39",
+    "current_version": "0.3.40",
+    "merge_sha": "b0fc7a176e4ca11a71a60d0f9f085667bf190a96",
+    "at": "2026-07-13T05:56:35.090Z"
   }
 }
