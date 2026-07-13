@@ -63,5 +63,12 @@
     "transitous",
     "tranzy",
     "reconciliation"
-  ]
+  ],
+  "_n3ary_release_bot_skip": {
+    "reason": "merge-changed-version",
+    "previous_version": "0.3.46",
+    "current_version": "0.3.47",
+    "merge_sha": "4dc73f5cccee7483b1731595dfc73f54eb349e8a",
+    "at": "2026-07-13T08:25:27.980Z"
+  }
 }
