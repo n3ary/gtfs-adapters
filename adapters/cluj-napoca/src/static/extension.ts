@@ -219,7 +219,7 @@ export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticEx
         // `INTEGER` column would otherwise reject the row, and a
         // malformed emit is loud failure not silent data loss).
         // `icon` is the lucide-svelte slug the consumer renders in
-        // the tag chip; owned by the adapter's `routeCategory.CATEGORIES`,
+        // the tag chip; owned by the adapter's `routeCategory.TAGS`,
         // not the consumer.
         rows: feedConfig.routeTags && feedConfig.routeTags.length > 0
           ? feedConfig.routeTags.map((r) => {

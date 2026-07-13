@@ -329,7 +329,7 @@ describe('reconcile', () => {
     // Trailing "(untold)" stripped from long_name. M26U is also
     // metroline (M* prefix) -> route_desc carries both tag labels.
     // CSV writer quotes the field because it contains a comma.
-    // With the reordered CATEGORIES (everyday-first: metroline=1
+    // With the reordered TAGS (everyday-first: metroline=1
     // before festival=3), the comma-join in route_desc puts
     // Metropolitan before Untold for 1:many routes.
     expect(r68row).toMatch(/,Uzinei Electrice - Floresti \/ Cetate,"Metropolitan, Untold",/);

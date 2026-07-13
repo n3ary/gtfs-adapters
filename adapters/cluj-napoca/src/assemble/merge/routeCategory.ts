@@ -89,61 +89,62 @@ import { type RouteRow } from '@n3ary/gtfs-spec/spec';
 import { terminalNamesMatch, normalizeStopName } from '../emit/trips.ts';
 
 /**
- * Categories, ordered most-specific first within each surface.
+ * TAGS: route service-class taxonomy (1:many per route, drives
+ * `route_desc` + the producer-extension `_route_tags` table).
  *
- * Each entry: `{ id, label, surface, match(s, l, d) }` where
+ * Each entry: `{ id, label, icon, match(s, l, d) }` where
  *
- *   - `id` is the machine-readable identifier (network_id in
- *     `networks.txt`, the tag_id in `route_desc`).
- *   - `label` is the human-readable string -- for networks it
- *     becomes `networks.txt` `network_name`; for tags it becomes
- *     one entry of the comma-joined `route_desc`.
- *   - `icon` (tag entries only, optional) is the lucide-svelte
- *     icon-name string consumers render in the chip. The adapter
- *     owns the icon-to-tag mapping (one place to update when a
- *     new tag ships); the app just looks the icon up in a
- *     registry keyed by this string. The names are the lucide
- *     slugs in `kebab-case` minus the `lucide-` brand prefix
- *     (e.g. `moon`, `map-pin`, `plane`, `music`, `zap`). Missing
- *     `icon` is fine -- the app falls back to a `Star` default.
- *   - `surface` is either `'tag'` (drives `route_desc` labels,
- *     multiple allowed per route) or `'network'` (drives
- *     `networks.txt` + `route_networks.txt`, exactly one per route).
+ *   - `id` is the machine-readable tag_id.
+ *   - `label` is the human-readable string (one entry of the
+ *     comma-joined `route_desc`).
+ *   - `icon` is the lucide-svelte icon-name string the consumer
+ *     renders in the tag chip. The adapter owns the icon-to-tag
+ *     mapping (one place to update when a new tag ships); the app
+ *     just looks the icon up in a registry keyed by this string.
+ *     The names are the lucide slugs in `kebab-case` minus the
+ *     `lucide-` brand prefix (e.g. `moon`, `map-pin`, `plane`,
+ *     `music`, `zap`).
  *   - `match` is a predicate over `(route_short_name, route_long_name,
  *     route_desc)`. We check all three because Tranzy sometimes
  *     carries the signal in just one -- e.g. "(untold)" annotation
  *     lands in `route_desc` for festival routes.
  *
- * Declaration order matters in two ways:
- *   1. The `surface: 'tag'` entries are listed in CATEGORIES order
- *      for the comma-join in `route_desc` (priority ASCENDING =
- *      everyday-first; the editorial choice is "the route's
- *      default identity is the lowest-priority tag, special-event
- *      overlays come after"). Live consumers (neary's map view
- *      + favorites filter) sort by priority ASCENDING for badge
- *      display, so the first tag in the list reads as the
- *      route's primary identity.
- *      Current order: night(0), metroline(1), airport(2),
- *                     festival(3), special(4).
- *   2. The `surface: 'network'` entries are listed in CATEGORIES
- *      order for the `networks.txt` row order. `normal` is
- *      declared first, `school` is declared last; networks.txt
- *      emits them in that order. Same 0-indexed priority as
- *      tags: normal(0), school(1).
+ * Declaration order matters for the comma-join in `route_desc` and
+ * for the badge sort in the consumer UI. The position in the
+ * array IS the priority (0-indexed, derived by `TAG_INDEX` below).
  *
- * Add new entries at the END so existing priorities stay stable.
+ * Editorial choice: "everyday first, special-event overlays after".
+ * The route's default identity is the lowest-priority tag, and the
+ * rarer event-overlays come after. Live consumers (neary's map view
+ * + favorites filter) sort by priority ASCENDING for badge display,
+ * so the first tag in the list reads as the route's primary
+ * identity. Current order:
+ *
+ *   night     = 0   (default identity for late-evening routes)
+ *   metroline = 1   (the suburban/metroline bus network)
+ *   airport   = 2
+ *   festival  = 3
+ *   special   = 4   (rarest; Cursa Speciala)
+ *
+ * Add new tags at the END so existing priorities stay stable.
  *
  * **`commuter` was removed**: D51 (the only `D*`-prefixed route) is
  * not a commuter rail service -- per ctpcj.ro it's an employee-only /
  * convention transport route, not a public commuter pattern. If a
  * future feed has a genuine commuter service, it can be re-added here
  * with a more specific pattern.
+ *
+ * The split between TAGS (1:many, optional, producer-extension for
+ * the n:m membership) and NETWORKS (1:1, required, public GTFS
+ * spec surface) is intentional -- the public GTFS spec's
+ * `route_networks.txt` PK is `route_id` alone, so networks can't
+ * carry 1:many membership on the public surface. The producer
+ * extension `_route_tags` carries that n:m membership.
  */
-export const CATEGORIES = [
+export const TAGS = [
   {
     id: 'night',
     label: 'Noapte',
-    surface: 'tag',
     icon: 'moon',
     // Night services. Signal is `*N` suffix or "noapte" substring
     // (Romanian for "night"; Tranzy uses "Disp." prefix on headsigns
@@ -157,7 +158,6 @@ export const CATEGORIES = [
   {
     id: 'metroline',
     label: 'Metropolitan',
-    surface: 'tag',
     icon: 'map-pin',
     // Cluj-CTP's own term for the suburban/metroline bus network is
     // "Metropolitan" (per ctpcj.ro). Used in the consumer-facing label
@@ -167,7 +167,6 @@ export const CATEGORIES = [
   {
     id: 'airport',
     label: 'Aeroport Expres',
-    surface: 'tag',
     icon: 'plane',
     match: (s, l, d) =>
       /^A\d/.test(s) ||
@@ -177,7 +176,6 @@ export const CATEGORIES = [
   {
     id: 'festival',
     label: 'Untold',
-    surface: 'tag',
     icon: 'music',
     // Festival services (Untold Music Festival in Cluj). The signal
     // is either:
@@ -193,26 +191,65 @@ export const CATEGORIES = [
   {
     id: 'special',
     label: 'Cursa Speciala',
-    surface: 'tag',
     icon: 'zap',
     match: (s, l, d) =>
       s === 'CS' || /CURSA SPECIALA/i.test(l) || /CURSA SPECIALA/i.test(d),
   },
+];
+
+/**
+ * `tag_id` -> position in the `TAGS` array. The canonical "priority"
+ * consumers sort by for stable badge ordering. 0-indexed. Built
+ * once at module load from the same source as `TAGS`, so a future
+ * refactor that rebuilds one without the other throws a loud
+ * invariant error in `classifyRoute` rather than shipping a
+ * silent priority=0.
+ */
+const TAG_INDEX = new Map(TAGS.map((cat, i) => [cat.id, i]));
+
+/**
+ * NETWORKS: route service-identity taxonomy (1:1 per route, drives
+ * the public GTFS `networks.txt` + `route_networks.txt`).
+ *
+ * Each entry: `{ id, label, match(s, l, d) }` where
+ *
+ *   - `id` is the machine-readable `network_id` (in `networks.txt`).
+ *   - `label` is the human-readable `network_name`.
+ *   - `match` is a predicate over `(route_short_name, route_long_name,
+ *     route_desc)`. Same pattern as TAGS.
+ *
+ * Two and exactly two networks ship for cluj: `school` (TE-prefixed
+ * Transport Elevi operator) + `normal` (the catch-all fallback for
+ * every other route). The 1:1 constraint of the public GTFS spec's
+ * `route_networks.txt` is satisfied by construction: each route
+ * belongs to exactly one network, and the normal fallback fires
+ * for every non-school match.
+ *
+ * Declaration order is the 1:1 priority-pick order: `classifyNetwork`
+ * walks `NETWORKS` in array order; the first non-`normal` match
+ * wins, and `normal` (the fallback) is returned when no pattern
+ * matches. Putting `normal` second in the array is the convention;
+ * the `classifyNetwork` loop explicitly skips it during the
+ * pattern-walk phase and only returns it as the fallback.
+ *
+ * Networks deliberately have no `icon` field. The app renders
+ * network chips as color + label only -- no icon. Tags carry the
+ * icon; networks don't.
+ */
+export const NETWORKS = [
   {
     id: 'normal',
     label: 'Normal',
-    surface: 'network',
     // Catch-all network for routes that don't match `school`. The
     // `match` returns false by design -- normal is not a pattern, it's
-    // the fallback. `applyRouteCategory` assigns the normal network
-    // to every route that didn't match `school` (which is every
-    // non-TE route, since the only network predicate is TE*).
+    // the fallback. `classifyNetwork` explicitly skips this entry
+    // during the pattern-walk phase and only returns it as the
+    // fallback when no other network matches.
     match: () => false,
   },
   {
     id: 'school',
     label: 'Transport Elevi',
-    surface: 'network',
     // School-network routes are the Transport Elevi (TE) operator's
     // routes. The match is intentionally broad -- TE-prefixed
     // `route_short_name` (TE1..TE14, TE-OG), TE-prefixed `long_name`
@@ -241,46 +278,10 @@ export const CATEGORIES = [
   },
 ];
 
-/** Tag entries only (subset of CATEGORIES where `surface === 'tag'`). */
-const TAG_ENTRIES = CATEGORIES.filter((c) => c.surface === 'tag');
-
 /**
- * `tag_id` -> position in the TAG_ENTRIES list (i.e. the TAGS
- * declaration index after the `surface === 'network'` entries are
- * filtered out). This is the canonical "priority" consumers sort
- * by for stable badge ordering. 0-indexed.
- *
- *   night     = 0   (default identity for late-evening routes)
- *   metroline = 1   (the suburban/metroline bus network)
- *   airport   = 2
- *   festival  = 3
- *   special   = 4   (rarest; Cursa Speciala)
- *
- * Sort ASCENDING so the route's default identity (night, metroline)
- * reads first; special-event overlays (festival, special) come
- * after. New tags go at the END so existing priorities stay
- * stable -- see CATEGORIES JSDoc.
- *
- * Used by `classifyRoute` to stamp the per-row priority. The
- * previous implementation (`applyRouteCategory` wrote the
- * per-route-array index) was equivalent for 1:many routes
- * (because `classifyRoute` walks TAG_ENTRIES in declaration
- * order, so the returned array IS in TAGS order) but always
- * 0 for 1:1 routes, regardless of which tag the route had.
- * Consumers sorting by priority got a stable order for 1:many
- * but a meaningless 0-vs-0 tie for 1:1 (e.g. all metroline
- * routes were priority 0, indistinguishable from all festival
- * routes).
- */
-const TAG_INDEX = new Map(TAG_ENTRIES.map((cat, i) => [cat.id, i]));
-
-/** Network entries only (subset of CATEGORIES where `surface === 'network'`). */
-const NETWORK_ENTRIES = CATEGORIES.filter((c) => c.surface === 'network');
-
-/**
- * Classify a single route's tag list. Returns all matching tag-surface
- * categories in declaration order (CATEGORIES order). Empty array for
- * regular urban routes that match no tag.
+ * Classify a single route's tag list. Returns all matching tags in
+ * `TAGS` declaration order. Empty array for regular urban routes
+ * that match no tag.
  *
  * **1:many is intentional**: a route can carry multiple tags. The
  * classic case is `M26U` -- `*U` suffix (festival) AND `M*` prefix
@@ -301,17 +302,17 @@ export function classifyRoute(row) {
   const l = (row.route_long_name ?? '').toString();
   const d = (row.route_desc ?? '').toString();
   const matches = [];
-  for (const cat of TAG_ENTRIES) {
+  for (const cat of TAGS) {
     if (cat.match(s, l, d)) {
       const priority = TAG_INDEX.get(cat.id);
       if (priority === undefined) {
-        // Defensive: TAG_ENTRIES and TAG_INDEX are built from the
-        // same source, so this can only happen if a future refactor
+        // Defensive: TAGS and TAG_INDEX are built from the same
+        // source, so this can only happen if a future refactor
         // rebuilds one without the other. Surface the invariant
         // breach loudly so it doesn't ship as a silent priority=0.
         throw new Error(
           `classifyRoute: TAG_INDEX missing entry for ${cat.id}; ` +
-          'TAG_ENTRIES and TAG_INDEX must stay in sync.',
+          'TAGS and TAG_INDEX must stay in sync.',
         );
       }
       matches.push({ id: cat.id, label: cat.label, priority, icon: cat.icon });
@@ -327,8 +328,9 @@ export function classifyRoute(row) {
  * `route_id`; this function guarantees the same.
  *
  * Exposed for tests + the orchestrator. The internal loop walks
- * NETWORK_ENTRIES in declaration order; `school` is declared first
- * so TE* routes pick it up before the normal fallback fires.
+ * `NETWORKS` in declaration order; `school` matches first when
+ * the route has the TE pattern, and `normal` is the fallback for
+ * everything else.
  *
  * @param {{ route_short_name?: string, route_long_name?: string, route_desc?: string }} row
  * @returns {{ id: string, label: string }}
@@ -337,15 +339,15 @@ export function classifyNetwork(row) {
   const s = (row.route_short_name ?? '').toString();
   const l = (row.route_long_name ?? '').toString();
   const d = (row.route_desc ?? '').toString();
-  for (const cat of NETWORK_ENTRIES) {
+  for (const cat of NETWORKS) {
     if (cat.id === 'normal') continue; // normal is the fallback, not a pattern
     if (cat.match(s, l, d)) {
       return { id: cat.id, label: cat.label };
     }
   }
-  const normal = NETWORK_ENTRIES.find((c) => c.id === 'normal');
-  // `normal` is always in NETWORK_ENTRIES (declared at the end of
-  // CATEGORIES). Defensive default if it ever gets removed.
+  const normal = NETWORKS.find((c) => c.id === 'normal');
+  // `normal` is always in NETWORKS (declared first per the
+  // convention). Defensive default if it ever gets removed.
   return normal
     ? { id: normal.id, label: normal.label }
     : { id: 'normal', label: 'Normal' };
@@ -682,16 +684,15 @@ function isStaleLongNameVariant(cleanedDesc, cleanedLong, routeStopNames) {
 }
 
 /**
- * Get the set of tag labels whose string matches any CATEGORIES
- * label. Used to filter the parenthetical-content pool: a
- * stripped "(untold)" would be redundant if the route is already
- * tagged as `festival` (label "Untold"). The match is
- * case-insensitive.
+ * Get the set of tag labels whose string matches any `TAGS` label.
+ * Used to filter the parenthetical-content pool: a stripped
+ * "(untold)" would be redundant if the route is already tagged as
+ * `festival` (label "Untold"). The match is case-insensitive.
  *
  * @returns {Set<string>} lowercased tag labels
  */
 function tagLabelSetLower() {
-  return new Set(TAG_ENTRIES.map((c) => c.label.toLowerCase()));
+  return new Set(TAGS.map((c) => c.label.toLowerCase()));
 }
 
 /**
@@ -802,11 +803,11 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
       // `tags` already carries the TAGS-declaration index as
       // `priority` (set by `classifyRoute` from TAG_INDEX). The
       // 1:1 case now distinguishes tags: a 1:1 metroline route
-      // is priority 4, a 1:1 festival route is priority 1, etc.
+      // is priority 1, a 1:1 festival route is priority 3, etc.
       // (1:many ordering is unchanged: `classifyRoute` walks
-      // TAG_ENTRIES in declaration order, so the per-route
-      // array IS in TAGS order and the priority values are
-      // already ascending.)
+      // `TAGS` in declaration order, so the per-route array IS
+      // in TAGS order and the priority values are already
+      // ascending.)
       routeTags.set(row.route_id, tags);
     }
 
@@ -882,10 +883,11 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
     // fallback (below) handles the "route has a classification but
     // no good desc to surface" case (TE1, ELEVI-99, ...).
     if (tags.length > 0) {
-      // Tagged. Base = comma-joined tag labels (CATEGORIES order).
-      // Append captured parenthetical content when it provides
-      // non-redundant info. School is not a tag, so a school-route
-      // with no tag falls through to the un-tagged branch below.
+      // Tagged. Base = comma-joined tag labels (TAGS declaration
+      // order). Append captured parenthetical content when it
+      // provides non-redundant info. School is not a tag, so a
+      // school-route with no tag falls through to the un-tagged
+      // branch below.
       const base = tags.map((t) => t.label).join(', ');
       if (dedupedStripped.length > 0) {
         row.route_desc = `${base} | ${dedupedStripped.join(', ')}`;
@@ -1070,10 +1072,10 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
  * which tag ids exist for the cluj adapter. For networks, use
  * `getAllNetworks` instead.
  *
- * @returns {Array<{ id: string, label: string, surface: 'tag' }>}
+ * @returns {Array<{ id: string, label: string, icon?: string }>}
  */
 export function getAllTags() {
-  return TAG_ENTRIES.map(({ id, label }) => ({ id, label, surface: 'tag' }));
+  return TAGS.map(({ id, label, icon }) => ({ id, label, icon }));
 }
 
 /**
@@ -1081,23 +1083,29 @@ export function getAllTags() {
  * the `emit/networks.js` module. The list is in declaration order,
  * which is the order `networks.txt` will emit rows in.
  *
- * @returns {Array<{ id: string, label: string, surface: 'network' }>}
+ * @returns {Array<{ id: string, label: string }>}
  */
 export function getAllNetworks() {
-  return NETWORK_ENTRIES.map(({ id, label }) => ({ id, label, surface: 'network' }));
+  return NETWORKS.map(({ id, label }) => ({ id, label }));
 }
 
 /**
- * Back-compat shim: returns the full CATEGORIES list (tags + networks).
- * Prefer `getAllTags` or `getAllNetworks` for the specific surface.
+ * Back-compat shim: returns the unified tag + network list (the
+ * consumers that imported `getAllCategories` get both surfaces in
+ * one array). Prefer `getAllTags` or `getAllNetworks` for the
+ * specific surface.
  *
- * Kept because earlier code paths in this file and downstream modules
- * imported `getAllCategories`; renaming would have churned the test
- * suite. The semantics are unchanged: returns every entry in
- * CATEGORIES declaration order with id + label.
+ * Kept because earlier code paths in this file and downstream
+ * modules imported `getAllCategories`; renaming would have churned
+ * the test suite. The semantics: tags first (in `TAGS` order),
+ * then networks (in `NETWORKS` order), with each entry carrying
+ * `surface: 'tag' | 'network'` so consumers can distinguish.
  *
- * @returns {Array<{ id: string, label: string, surface: 'tag' | 'network' }>}
+ * @returns {Array<{ id: string, label: string, surface: 'tag' | 'network', icon?: string }>}
  */
 export function getAllCategories() {
-  return CATEGORIES.map(({ id, label, surface }) => ({ id, label, surface }));
+  return [
+    ...TAGS.map(({ id, label, icon }) => ({ id, label, surface: 'tag', icon })),
+    ...NETWORKS.map(({ id, label }) => ({ id, label, surface: 'network' })),
+  ];
 }

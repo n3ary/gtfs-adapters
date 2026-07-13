@@ -86,7 +86,7 @@ const ROUTE_TAGS_HEADER = 'tag_id,route_id,tag_label,priority,icon';
  *   - `icon` is the lucide-svelte slug the consumer renders in the
  *     tag chip (e.g. `moon`, `map-pin`, `plane`, `music`, `zap`).
  *     The adapter owns the tag-to-icon mapping — adding a new tag
- *     means a single edit in `routeCategory.CATEGORIES`, not a
+ *     means a single edit in `routeCategory.TAGS`, not a
  *     consumer code change. Empty string when the tag entry has
  *     no icon declared.
  *

@@ -2,7 +2,8 @@
 import { describe, it, expect } from 'vitest';
 
 import {
-  CATEGORIES,
+  TAGS,
+  NETWORKS,
   classifyRoute,
   classifyNetwork,
   cleanLongName,
@@ -105,7 +106,7 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
     expect(classifyRoute({ route_short_name: '30U', route_long_name: 'Grigorescu - IRA' }))
       .toEqual([{ id: 'festival', label: 'Untold', priority: 3, icon: 'music' }]);
     // M26U is also metroline (M* prefix) -> 1:many. With the
-    // reordered CATEGORIES (everyday-first), metroline (priority 1)
+    // reordered TAGS (everyday-first), metroline (priority 1)
     // comes before festival (priority 3).
     expect(classifyRoute({
       route_short_name: 'M26U',
@@ -161,7 +162,7 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
     // The canonical 1:many tag case: M26U-like routes. school is a
     // network (not a tag), so the 1:many here is purely on the tag
     // surface. M26U is in the normal network (no TE prefix anywhere).
-    // With the reordered CATEGORIES (everyday-first), metroline
+    // With the reordered TAGS (everyday-first), metroline
     // (priority 1) comes before festival (priority 3).
     const result = classifyRoute({
       route_short_name: 'M26U',
@@ -187,21 +188,19 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
       .toEqual([]);
   });
 
-  it('respects priority order (matches in CATEGORIES tag order)', () => {
-    // 1:many results preserve CATEGORIES declaration order (filtered
-    // to tag-surface entries). Editorial choice: every-day first
-    // (night, metroline, airport -- the route's typical identity),
-    // then event overlays (festival, special -- rarer). The
-    // `surface: 'network'` entries (`school` and `normal`) are
-    // excluded from TAG_ENTRIES -- they're a separate surface
-    // driven by networks.txt, not tags.
-    const tagIds = CATEGORIES.filter((c) => c.surface === 'tag').map((c) => c.id);
+  it('respects priority order (matches in TAGS declaration order)', () => {
+    // 1:many results preserve `TAGS` declaration order. Editorial
+    // choice: every-day first (night, metroline, airport -- the
+    // route's typical identity), then event overlays (festival,
+    // special -- rarer). Networks live in a separate `NETWORKS`
+    // array and don't appear in the tag result.
+    const tagIds = TAGS.map((c) => c.id);
     expect(tagIds).toEqual(['night', 'metroline', 'airport', 'festival', 'special']);
     // For a festival + metroline 1:many case, metroline (priority 1)
     // comes BEFORE festival (priority 3) because metroline is
-    // declared earlier in CATEGORIES. Sort by priority ASCENDING
-    // is the editorial choice for "primary identity first, event
-    // overlay after".
+    // declared earlier in TAGS. Sort by priority ASCENDING is the
+    // editorial choice for "primary identity first, event overlay
+    // after".
     const result = classifyRoute({
       route_short_name: 'M26U',
       route_long_name: 'Floresti / Cetate (untold)',
@@ -218,7 +217,7 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
   it('stamps the icon field on every tag entry (consumer-renderable)', () => {
     // The icon field is part of the classifyRoute contract: every
     // tag returned carries the lucide-svelte slug declared in
-    // CATEGORIES. The app reads it to render the chip; the adapter
+    // TAGS. The app reads it to render the chip; the adapter
     // owns the icon-to-tag mapping (one place to update when a new
     // tag ships, vs. shipping a hardcoded id->icon table in every
     // consumer).
@@ -249,18 +248,18 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
     // regardless of which tag the route had. Consumers sorting
     // by priority couldn't distinguish a 1:1 metroline route
     // from a 1:1 festival route. This pins the TAGS-declaration
-    // index (position in TAG_ENTRIES, i.e. CATEGORIES filtered
-    // to surface === 'tag') for 1:1 cases of each of the 5
-    // current cluj tags.
+    // index (position in the `TAGS` array) for 1:1 cases of
+    // each of the 5 current cluj tags. Networks (`school` +
+    // `normal`) live in a separate `NETWORKS` array and don't
+    // appear in the priority map.
     const expectedPriorities: Record<string, number> = {
-      // TAG_INDEX values for the reordered CATEGORIES (see
-      // routeCategory.ts CATEGORIES JSDoc). Tag entries only
-      // (school + normal are network-only, filtered out).
-      night: 0,      // CATEGORIES index 0
-      metroline: 1,  // CATEGORIES index 1
-      airport: 2,    // CATEGORIES index 2
-      festival: 3,   // CATEGORIES index 3
-      special: 4,    // CATEGORIES index 4
+      // TAG_INDEX values (position in `TAGS` array -- see
+      // routeCategory.ts TAGS JSDoc). Networks are excluded.
+      night: 0,      // TAGS index 0
+      metroline: 1,  // TAGS index 1
+      airport: 2,    // TAGS index 2
+      festival: 3,   // TAGS index 3
+      special: 4,    // TAGS index 4
     };
     // For each tag, build a route that matches ONLY that tag and
     // assert the priority. The 1-tag-only inputs below are chosen
@@ -572,7 +571,7 @@ describe('applyRouteCategory -- orchestrator entry point', () => {
     expect(result.classifiedCount).toBe(1); // 1 route tagged
     expect(result.multiTagCount).toBe(1); // with 2 tags
     expect(result.networkCounts.normal).toBe(1); // M26U is normal (no TE)
-    // route_desc is comma-separated in CATEGORIES order: festival
+    // route_desc is comma-separated in TAGS order: festival
     // first, metroline second. School is NOT in the comma-join
     // (school is a network, not a tag).
     expect(routes[0].route_desc).toBe('Metropolitan, Untold');
@@ -763,14 +762,12 @@ describe('applyRouteCategory -- desc strategy + empty-desc fallback', () => {
     const result = applyRouteCategory({ routes, warnings });
     // Network = school (broad match); tag = [metroline].
     expect(result.routeNetworks.get('144')).toEqual({ id: 'school', label: 'Transport Elevi' });
-    // priority = 4 (TAGS-declaration index of `metroline` in
-    // TAG_ENTRIES, after `special` (0), `festival` (1), `night`
-    // (2), `airport` (3) are filtered out). The previous
-    // implementation wrote the per-route-array index, which
-    // is always 0 for 1:1 routes — that was indistinguishable
-    // from 1:1 special / festival / night / airport (all
-    // priority 0), so consumers sorting by priority got no
-    // signal. Issue #25 follow-up.
+    // priority = 1 (TAGS-declaration index of `metroline` in
+    // the `TAGS` array). The previous implementation wrote the
+    // per-route-array index, which is always 0 for 1:1 routes
+    // — that was indistinguishable from 1:1 special / festival
+    // / night / airport (all priority 0), so consumers sorting
+    // by priority got no signal. Issue #25 follow-up.
     expect(result.routeTags.get('144')).toEqual([
       { id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin' },
     ]);
@@ -1023,32 +1020,46 @@ describe('applyRouteCategory -- desc strategy + empty-desc fallback', () => {
 });
 
 describe('getAllCategories / getAllTags / getAllNetworks -- surface accessors', () => {
-  it('getAllCategories returns the full list with surface flag', () => {
+  it('getAllCategories returns the full list with surface flag (back-compat shim)', () => {
+    // `getAllCategories` is the back-compat shim that returns the
+    // unified TAGS + NETWORKS list (each entry carrying its surface
+    // discriminator + optional icon). New code should prefer
+    // `getAllTags` / `getAllNetworks` for the specific surface.
     const all = getAllCategories();
-    expect(all.length).toBe(CATEGORIES.length);
+    expect(all.length).toBe(TAGS.length + NETWORKS.length);
     for (const c of all) {
       expect(c).toHaveProperty('id');
       expect(c).toHaveProperty('label');
       expect(c).toHaveProperty('surface');
       expect(['tag', 'network']).toContain(c.surface);
     }
+    // Tags come first (in TAGS order), then networks (in NETWORKS
+    // order).
+    expect(all.slice(0, TAGS.length).map((c) => c.id)).toEqual(TAGS.map((c) => c.id));
+    expect(all.slice(TAGS.length).map((c) => c.id)).toEqual(NETWORKS.map((c) => c.id));
   });
 
-  it('getAllTags returns tag-surface entries only (excludes networks)', () => {
+  it('getAllTags returns the tag list (no `surface` discriminator, has `icon`)', () => {
     const tags = getAllTags();
     const tagIds = tags.map((c) => c.id);
     expect(tagIds).toEqual(['night', 'metroline', 'airport', 'festival', 'special']);
     for (const t of tags) {
-      expect(t.surface).toBe('tag');
+      expect(t.id).toBeDefined();
+      expect(t.label).toBeDefined();
+      expect(typeof t.icon).toBe('string');
     }
   });
 
-  it('getAllNetworks returns network-surface entries only (school + normal)', () => {
+  it('getAllNetworks returns the network list (no `surface` discriminator, no `icon`)', () => {
     const nets = getAllNetworks();
     const netIds = nets.map((c) => c.id);
     expect(netIds).toEqual(['normal', 'school']);
     for (const n of nets) {
-      expect(n.surface).toBe('network');
+      expect(n.id).toBeDefined();
+      expect(n.label).toBeDefined();
+      // Networks deliberately have no `icon` field -- the app renders
+      // network chips as color + label only.
+      expect(n.icon).toBeUndefined();
     }
   });
 
