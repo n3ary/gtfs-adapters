@@ -200,7 +200,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish adapter
-        uses: n3ary/actions/.github/actions/package/publish@v23
+        uses: n3ary/actions/.github/actions/package/publish@v24
         with:
           package-dir: adapters/${{ matrix.adapter }}
           tag-template: 'adapters/{name}/v{version}'
