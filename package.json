@@ -7,12 +7,5 @@
   "packageManager": "pnpm@11.5.2",
   "engines": {
     "node": ">=24"
-  },
-  "_n3ary_release_bot_skip": {
-    "reason": "merge-changed-version",
-    "previous_version": "26.7.13-31",
-    "current_version": "26.7.13-32",
-    "merge_sha": "3c31a7310c35197b763e6d1319f0dbc40126fb8f",
-    "at": "2026-07-13T06:03:27.822Z"
   }
 }
