@@ -1,6 +1,6 @@
 {
   "name": "gtfs-adapters",
-  "version": "26.7.13-9",
+  "version": "26.7.13-10",
   "private": true,
   "description": "Monorepo of per-feed GTFS adapters for the n3ary family. Each adapter under adapters/<feed>/ is published independently to GitHub Packages and consumed by n3ary/gtfs (the generic spec + converter repo). See ./README.md.",
   "license": "PolyForm-Noncommercial-1.0.0",
