@@ -359,7 +359,7 @@ consumers.
 | `routes.route_desc` (tagged) | `applyRouteCategory` -> comma-joined tag labels | n:m | All matching tag labels, comma-joined (e.g. `"Metropolitan, Untold"` for an M26U) |
 | `networks.txt` `network_name` | the matched network's `label` | 1 per used network | Same string as `networks.txt` `network_name` |
 | `route_networks.txt` (public) | `applyRouteCategory.routeNetworks` (1 network per route) | 1:1 by `route_id` | `(network_id, route_id)` — every route is in exactly one of `school` or `normal` |
-| `_route_tags` (producer extension, issue #25) | `applyRouteCategory.routeTags` (all matching tags) | n:m | `(tag_id, route_id, tag_label, priority)` |
+| `_route_tags` (producer extension, issue #25) | `applyRouteCategory.routeTags` (all matching tags) | n:m | `(tag_id, route_id, tag_label, priority, icon)` |
 
 ### Why 1:many tags diverge from the 1:1 network surface
 
@@ -405,6 +405,7 @@ CREATE TABLE _route_tags (
   route_id  TEXT NOT NULL,
   tag_label TEXT,
   priority  INTEGER,
+  icon      TEXT,
   PRIMARY KEY (tag_id, route_id)
 ) WITHOUT ROWID;
 ```
@@ -412,7 +413,12 @@ CREATE TABLE _route_tags (
 The composite PK on `(tag_id, route_id)` — NOT just `route_id` —
 is the whole point: the n:m mapping IS the row. `priority` is
 the `TAGS` declaration index (0-based) and gives consumers a
-stable sort order for badge rendering.
+stable sort order for badge rendering. `icon` is the
+lucide-svelte slug the consumer renders in the tag chip — owned
+by the adapter (the `TAGS` array in `routeCategory.ts`), not
+hardcoded in the app. Empty string when the tag has no icon
+declared; the app falls back to its `Star` default in that
+case.
 
 ### Priority-first consistency check
 
@@ -448,26 +454,40 @@ feed shouldn't ship until the discrepancy is resolved.
 ### Where the data flows
 
 ```
-[cluj adapter TAGS declaration (per-surface)]
-  - network surface: normal (fallback) + school (TE* short_name)
-                    ^ 0-indexed priority: normal=0, school=1
-  - tag surface: night, metroline, airport, festival, special
-                 ^ 0-indexed priority: night=0, metroline=1,
-                   airport=2, festival=3, special=4.
-                 Order = "every-day first, event overlays after";
-                 consumers sort by priority ASCENDING for badge
-                 rendering.
+[cluj adapter TAGS + NETWORKS declarations (two arrays)]
+
+TAGS array (1:many per route; drives route_desc + _route_tags):
+  night, metroline, airport, festival, special
+  ^ 0-indexed priority: night=0, metroline=1, airport=2,
+    festival=3, special=4.
+  Each tag carries an `icon` (lucide-svelte slug) for chip
+  rendering -- owned by the adapter, not hardcoded in the
+  consumer. Mapping: night=moon, metroline=map-pin, airport=
+  plane, festival=music, special=zap. Adding a new tag means
+  a single edit in TAGS.
+  Order = "every-day first, event overlays after"; consumers
+  sort by priority ASCENDING for badge rendering.
+
+NETWORKS array (1:1 per route; drives networks.txt +
+  route_networks.txt):
+  normal (fallback) + school (TE* short_name)
+  ^ priority-pick order: networks are walked in array
+    order; first non-`normal` match wins, `normal` is the
+    fallback for every other route.
+  Networks deliberately have no `icon` field -- the app
+  renders network chips as color + label only. TAGS carry
+  icons; NETWORKS don't.
             |
             v
 applyRouteCategory(routes, ...)
-   1. classify networks (1:1, priority-pick)
+   1. classify networks (1:1, priority-pick via NETWORKS)
    2. classify tags (1:m, in TAGS order)
    3. clean long_name + desc
    4. resolve long_name fallback (cleaned desc -> stop_times)
    5. set route_desc = comma-joined tag labels (tagged)
       or cleaned desc (un-tagged) or '' (no unique info)
    6. return routeNetworks: Map<route_id, {id, label}>
-      AND routeTags: Map<route_id, [{id, label, priority}]>
+      AND routeTags: Map<route_id, [{id, label, priority, icon}]>
             |
             +--> buildNetworks(routes, routeNetworks)
             |       -> networks.txt (school + normal)
@@ -476,6 +496,13 @@ applyRouteCategory(routes, ...)
             +--> buildRouteTags(routeTags)
                     -> _route_tags.txt (n:m, all matching tags)
 ```
+
+The two arrays are independent -- the public GTFS spec's
+`route_networks.txt` is 1:1 by `route_id`, so networks
+can't carry 1:many membership. The producer extension
+`_route_tags.txt` carries the n:m tag membership. A
+route can be in `school` network AND tagged as `metroline` at
+the same time (e.g. M76A = school bus + metropolitan route).
 
 The structured maps are the **single source of truth**. Neither
 emitter reverse-parses `route_desc` — that round-trip is fragile

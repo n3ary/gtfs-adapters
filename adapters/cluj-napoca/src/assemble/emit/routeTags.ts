@@ -59,10 +59,10 @@
 import { stringify } from 'csv-stringify/sync';
 
 /**
- * @typedef {{ id: string, label: string, priority: number }} RouteTag
+ * @typedef {{ id: string, label: string, priority: number, icon?: string }} RouteTag
  */
 
-const ROUTE_TAGS_HEADER = 'tag_id,route_id,tag_label,priority';
+const ROUTE_TAGS_HEADER = 'tag_id,route_id,tag_label,priority,icon';
 
 /**
  * Build the CSV body for `_route_tags` from the structured per-route
@@ -83,6 +83,12 @@ const ROUTE_TAGS_HEADER = 'tag_id,route_id,tag_label,priority';
  *     (Option 2 from issue #25), so denormalizing the label is
  *     cheap and avoids forcing consumers to join against
  *     `networks.txt` for the human-readable string.
+ *   - `icon` is the lucide-svelte slug the consumer renders in the
+ *     tag chip (e.g. `moon`, `map-pin`, `plane`, `music`, `zap`).
+ *     The adapter owns the tag-to-icon mapping — adding a new tag
+ *     means a single edit in `routeCategory.TAGS`, not a
+ *     consumer code change. Empty string when the tag entry has
+ *     no icon declared.
  *
  * @param {Map<string, ReadonlyArray<RouteTag>>} routeTags
  *   The per-route tag map from `applyRouteCategory.routeTags`. Routes
@@ -116,17 +122,18 @@ export function buildRouteTags(routeTags) {
     routeId,
     tag.label,
     String(tag.priority),
+    tag.icon ?? '',
   ]);
 
   // csv-stringify/sync with explicit `header: false` + manual header
   // line keeps the column order locked to (tag_id, route_id,
-  // tag_label, priority) regardless of object key ordering. We don't
-  // use `serializeRows` here because `_route_tags` is a producer
-  // extension with no spec schema — its column order is this
-  // adapter's contract, not the spec's.
+  // tag_label, priority, icon) regardless of object key ordering. We
+  // don't use `serializeRows` here because `_route_tags` is a
+  // producer extension with no spec schema — its column order is
+  // this adapter's contract, not the spec's.
   const body = stringify(rows, {
     header: false,
-    columns: ['tag_id', 'route_id', 'tag_label', 'priority'],
+    columns: ['tag_id', 'route_id', 'tag_label', 'priority', 'icon'],
     record_delimiter: '\n',
   });
   return ROUTE_TAGS_HEADER + '\n' + body;
