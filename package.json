@@ -10,9 +10,9 @@
   },
   "_n3ary_release_bot_skip": {
     "reason": "merge-changed-version",
-    "previous_version": "26.7.13-27",
-    "current_version": "26.7.13-28",
-    "merge_sha": "9c0371317ccf154a25b402b71b967ab6de80add7",
-    "at": "2026-07-13T05:55:42.234Z"
+    "previous_version": "26.7.13-28",
+    "current_version": "26.7.13-29",
+    "merge_sha": "44e312dd4fc83324d2c2f8e6ff47fc6802d0287b",
+    "at": "2026-07-13T05:57:26.798Z"
   }
 }
