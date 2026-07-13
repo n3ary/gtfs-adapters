@@ -108,12 +108,20 @@ import { terminalNamesMatch, normalizeStopName } from '../emit/trips.ts';
  *
  * Declaration order matters in two ways:
  *   1. The `surface: 'tag'` entries are listed in CATEGORIES order
- *      for the comma-join in `route_desc` (specific first, e.g.
- *      `special` before `metroline`).
+ *      for the comma-join in `route_desc` (priority ASCENDING =
+ *      everyday-first; the editorial choice is "the route's
+ *      default identity is the lowest-priority tag, special-event
+ *      overlays come after"). Live consumers (neary's map view
+ *      + favorites filter) sort by priority ASCENDING for badge
+ *      display, so the first tag in the list reads as the
+ *      route's primary identity.
+ *      Current order: night(0), metroline(1), airport(2),
+ *                     festival(3), special(4).
  *   2. The `surface: 'network'` entries are listed in CATEGORIES
- *      order for the `networks.txt` row order. `school` is declared
- *      first, `normal` is declared last; networks.txt emits them
- *      in that order.
+ *      order for the `networks.txt` row order. `normal` is
+ *      declared first, `school` is declared last; networks.txt
+ *      emits them in that order. Same 0-indexed priority as
+ *      tags: normal(0), school(1).
  *
  * Add new entries at the END so existing priorities stay stable.
  *
@@ -125,11 +133,68 @@ import { terminalNamesMatch, normalizeStopName } from '../emit/trips.ts';
  */
 export const CATEGORIES = [
   {
+    id: 'night',
+    label: 'Noapte',
+    surface: 'tag',
+    // Night services. Signal is `*N` suffix or "noapte" substring
+    // (Romanian for "night"; Tranzy uses "Disp." prefix on headsigns
+    // for depot-relative direction, but the long_name/desc sometimes
+    // has "Noapte" explicitly).
+    match: (s, l, d) =>
+      /N$/.test(s) ||
+      /noapte/i.test(l) ||
+      /noapte/i.test(d),
+  },
+  {
+    id: 'metroline',
+    label: 'Metropolitan',
+    surface: 'tag',
+    // Cluj-CTP's own term for the suburban/metroline bus network is
+    // "Metropolitan" (per ctpcj.ro). Used in the consumer-facing label
+    // because that's what riders search for on the agency site.
+    match: (s) => /^M\d/.test(s),
+  },
+  {
+    id: 'airport',
+    label: 'Aeroport Expres',
+    surface: 'tag',
+    match: (s, l, d) =>
+      /^A\d/.test(s) ||
+      /aeroport/i.test(l) ||
+      /aeroport/i.test(d),
+  },
+  {
+    id: 'festival',
+    label: 'Untold',
+    surface: 'tag',
+    // Festival services (Untold Music Festival in Cluj). The signal
+    // is either:
+    //   - `*U` suffix in short_name (`30U`, `M26U`)
+    //   - "untold" substring in long_name or route_desc (Tranzy's
+    //     parenthetical "(untold)" in long_name OR plain "Untold" in
+    //     desc). Case-insensitive on both.
+    match: (s, l, d) =>
+      /U$/.test(s) ||
+      /untold/i.test(l) ||
+      /untold/i.test(d),
+  },
+  {
     id: 'special',
     label: 'Cursa Speciala',
     surface: 'tag',
     match: (s, l, d) =>
       s === 'CS' || /CURSA SPECIALA/i.test(l) || /CURSA SPECIALA/i.test(d),
+  },
+  {
+    id: 'normal',
+    label: 'Normal',
+    surface: 'network',
+    // Catch-all network for routes that don't match `school`. The
+    // `match` returns false by design -- normal is not a pattern, it's
+    // the fallback. `applyRouteCategory` assigns the normal network
+    // to every route that didn't match `school` (which is every
+    // non-TE route, since the only network predicate is TE*).
+    match: () => false,
   },
   {
     id: 'school',
@@ -161,67 +226,40 @@ export const CATEGORIES = [
       /elevi/i.test(l) ||
       /elevi/i.test(d),
   },
-  {
-    id: 'festival',
-    label: 'Untold',
-    surface: 'tag',
-    // Festival services (Untold Music Festival in Cluj). The signal
-    // is either:
-    //   - `*U` suffix in short_name (`30U`, `M26U`)
-    //   - "untold" substring in long_name or route_desc (Tranzy's
-    //     parenthetical "(untold)" in long_name OR plain "Untold" in
-    //     desc). Case-insensitive on both.
-    match: (s, l, d) =>
-      /U$/.test(s) ||
-      /untold/i.test(l) ||
-      /untold/i.test(d),
-  },
-  {
-    id: 'night',
-    label: 'Noapte',
-    surface: 'tag',
-    // Night services. Signal is `*N` suffix or "noapte" substring
-    // (Romanian for "night"; Tranzy uses "Disp." prefix on headsigns
-    // for depot-relative direction, but the long_name/desc sometimes
-    // has "Noapte" explicitly).
-    match: (s, l, d) =>
-      /N$/.test(s) ||
-      /noapte/i.test(l) ||
-      /noapte/i.test(d),
-  },
-  {
-    id: 'airport',
-    label: 'Aeroport Expres',
-    surface: 'tag',
-    match: (s, l, d) =>
-      /^A\d/.test(s) ||
-      /aeroport/i.test(l) ||
-      /aeroport/i.test(d),
-  },
-  {
-    id: 'metroline',
-    label: 'Metropolitan',
-    surface: 'tag',
-    // Cluj-CTP's own term for the suburban/metroline bus network is
-    // "Metropolitan" (per ctpcj.ro). Used in the consumer-facing label
-    // because that's what riders search for on the agency site.
-    match: (s) => /^M\d/.test(s),
-  },
-  {
-    id: 'normal',
-    label: 'Normal',
-    surface: 'network',
-    // Catch-all network for routes that don't match `school`. The
-    // `match` returns false by design -- normal is not a pattern, it's
-    // the fallback. `applyRouteCategory` assigns the normal network
-    // to every route that didn't match `school` (which is every
-    // non-TE route, since the only network predicate is TE*).
-    match: () => false,
-  },
 ];
 
 /** Tag entries only (subset of CATEGORIES where `surface === 'tag'`). */
 const TAG_ENTRIES = CATEGORIES.filter((c) => c.surface === 'tag');
+
+/**
+ * `tag_id` -> position in the TAG_ENTRIES list (i.e. the TAGS
+ * declaration index after the `surface === 'network'` entries are
+ * filtered out). This is the canonical "priority" consumers sort
+ * by for stable badge ordering. 0-indexed.
+ *
+ *   night     = 0   (default identity for late-evening routes)
+ *   metroline = 1   (the suburban/metroline bus network)
+ *   airport   = 2
+ *   festival  = 3
+ *   special   = 4   (rarest; Cursa Speciala)
+ *
+ * Sort ASCENDING so the route's default identity (night, metroline)
+ * reads first; special-event overlays (festival, special) come
+ * after. New tags go at the END so existing priorities stay
+ * stable -- see CATEGORIES JSDoc.
+ *
+ * Used by `classifyRoute` to stamp the per-row priority. The
+ * previous implementation (`applyRouteCategory` wrote the
+ * per-route-array index) was equivalent for 1:many routes
+ * (because `classifyRoute` walks TAG_ENTRIES in declaration
+ * order, so the returned array IS in TAGS order) but always
+ * 0 for 1:1 routes, regardless of which tag the route had.
+ * Consumers sorting by priority got a stable order for 1:many
+ * but a meaningless 0-vs-0 tie for 1:1 (e.g. all metroline
+ * routes were priority 0, indistinguishable from all festival
+ * routes).
+ */
+const TAG_INDEX = new Map(TAG_ENTRIES.map((cat, i) => [cat.id, i]));
 
 /** Network entries only (subset of CATEGORIES where `surface === 'network'`). */
 const NETWORK_ENTRIES = CATEGORIES.filter((c) => c.surface === 'network');
@@ -243,7 +281,7 @@ const NETWORK_ENTRIES = CATEGORIES.filter((c) => c.surface === 'network');
  * network is a network-only surface, not a tag.
  *
  * @param {{ route_short_name?: string, route_long_name?: string, route_desc?: string }} row
- * @returns {Array<{ id: string, label: string }>}
+ * @returns {Array<{ id: string, label: string, priority: number }>}
  */
 export function classifyRoute(row) {
   const s = (row.route_short_name ?? '').toString();
@@ -252,7 +290,18 @@ export function classifyRoute(row) {
   const matches = [];
   for (const cat of TAG_ENTRIES) {
     if (cat.match(s, l, d)) {
-      matches.push({ id: cat.id, label: cat.label });
+      const priority = TAG_INDEX.get(cat.id);
+      if (priority === undefined) {
+        // Defensive: TAG_ENTRIES and TAG_INDEX are built from the
+        // same source, so this can only happen if a future refactor
+        // rebuilds one without the other. Surface the invariant
+        // breach loudly so it doesn't ship as a silent priority=0.
+        throw new Error(
+          `classifyRoute: TAG_INDEX missing entry for ${cat.id}; ` +
+          'TAG_ENTRIES and TAG_INDEX must stay in sync.',
+        );
+      }
+      matches.push({ id: cat.id, label: cat.label, priority });
     }
   }
   return matches;
@@ -737,7 +786,15 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
 
     routeNetworks.set(row.route_id, network);
     if (tags.length > 0) {
-      routeTags.set(row.route_id, tags.map((t, i) => ({ ...t, priority: i })));
+      // `tags` already carries the TAGS-declaration index as
+      // `priority` (set by `classifyRoute` from TAG_INDEX). The
+      // 1:1 case now distinguishes tags: a 1:1 metroline route
+      // is priority 4, a 1:1 festival route is priority 1, etc.
+      // (1:many ordering is unchanged: `classifyRoute` walks
+      // TAG_ENTRIES in declaration order, so the per-route
+      // array IS in TAGS order and the priority values are
+      // already ascending.)
+      routeTags.set(row.route_id, tags);
     }
 
     // 2. Cleanup long_name (capturing stripped parenthetical content).

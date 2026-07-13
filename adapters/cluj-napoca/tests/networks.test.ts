@@ -35,7 +35,7 @@ describe('buildNetworks — networks.txt + route_networks.txt', () => {
     ]);
     const { networksTxt, routeNetworksTxt, networkUsage } = buildNetworks(routes, routeNetworks);
     expect(networksTxt).toBe(
-      'network_id,network_name\nschool,Transport Elevi\nnormal,Normal\n',
+      'network_id,network_name\nnormal,Normal\nschool,Transport Elevi\n',
     );
     // route_networks rows: sorted by network_id then route_id for diff-stability.
     expect(routeNetworksTxt).toBe(
@@ -81,6 +81,9 @@ describe('buildNetworks — networks.txt + route_networks.txt', () => {
       ['94', { id: 'school', label: 'Transport Elevi' }],
     ]);
     const { networksTxt, routeNetworksTxt, networkUsage } = buildNetworks(routes, routeNetworks);
+    // The implementation emits only the networks actually referenced
+    // by the input routes -- so a feed of only TE* routes produces
+    // a networks.txt with just the `school` row (no normal row).
     expect(networksTxt).toBe('network_id,network_name\nschool,Transport Elevi\n');
     expect(routeNetworksTxt).toBe('network_id,route_id\nschool,93\nschool,94\n');
     expect(networkUsage.size).toBe(1);
@@ -126,7 +129,7 @@ describe('buildNetworks — networks.txt + route_networks.txt', () => {
     ]);
     const { networksTxt } = buildNetworks(routes, routeNetworks);
     expect(networksTxt).toBe(
-      'network_id,network_name\nschool,Transport Elevi\nnormal,Normal\n',
+      'network_id,network_name\nnormal,Normal\nschool,Transport Elevi\n',
     );
   });
 

@@ -449,8 +449,14 @@ feed shouldn't ship until the discrepancy is resolved.
 
 ```
 [cluj adapter TAGS declaration (per-surface)]
-  - network surface: school (TE* short_name) + normal (fallback)
-  - tag surface: special, festival, night, airport, metroline
+  - network surface: normal (fallback) + school (TE* short_name)
+                    ^ 0-indexed priority: normal=0, school=1
+  - tag surface: night, metroline, airport, festival, special
+                 ^ 0-indexed priority: night=0, metroline=1,
+                   airport=2, festival=3, special=4.
+                 Order = "every-day first, event overlays after";
+                 consumers sort by priority ASCENDING for badge
+                 rendering.
             |
             v
 applyRouteCategory(routes, ...)

@@ -269,8 +269,8 @@ describe('reconcile', () => {
     // networks.txt = 2 rows, period.
     expect(files['networks.txt']).toBe(
       'network_id,network_name\n' +
-      'school,Transport Elevi\n' +
-      'normal,Normal\n',
+      'normal,Normal\n' +
+      'school,Transport Elevi\n',
     );
 
     // route_networks.txt -- one row per route, 1:1 by route_id.
@@ -329,7 +329,10 @@ describe('reconcile', () => {
     // Trailing "(untold)" stripped from long_name. M26U is also
     // metroline (M* prefix) -> route_desc carries both tag labels.
     // CSV writer quotes the field because it contains a comma.
-    expect(r68row).toMatch(/,Uzinei Electrice - Floresti \/ Cetate,"Untold, Metropolitan",/);
+    // With the reordered CATEGORIES (everyday-first: metroline=1
+    // before festival=3), the comma-join in route_desc puts
+    // Metropolitan before Untold for 1:many routes.
+    expect(r68row).toMatch(/,Uzinei Electrice - Floresti \/ Cetate,"Metropolitan, Untold",/);
 
     const r15row = routesTxt.split('\n').find((l) => l.startsWith('15,'));
     // 25N: night tag. route_desc = "Noapte" (single tag).
