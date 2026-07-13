@@ -44,7 +44,7 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
       route_short_name: 'M76A',
       route_long_name: 'TE2 Floresti str. Somesului',
     });
-    expect(r1).toEqual([{ id: 'metroline', label: 'Metropolitan' }]);
+    expect(r1).toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1 }]);
     expect(classifyNetwork({
       route_short_name: 'M76A',
       route_long_name: 'TE2 Floresti str. Somesului',
@@ -54,7 +54,7 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
       route_short_name: 'M75B',
       route_long_name: 'TE1F',
     });
-    expect(r2).toEqual([{ id: 'metroline', label: 'Metropolitan' }]);
+    expect(r2).toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1 }]);
     expect(classifyNetwork({
       route_short_name: 'M75B',
       route_long_name: 'TE1F',
@@ -92,7 +92,7 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
       route_desc: 'Untold',
     });
     // Only festival is a tag; school is a network.
-    expect(result).toEqual([{ id: 'festival', label: 'Untold' }]);
+    expect(result).toEqual([{ id: 'festival', label: 'Untold', priority: 3 }]);
     // School is a network classification.
     expect(classifyNetwork({
       route_short_name: 'X1',
@@ -103,37 +103,39 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
 
   it('classifies *U suffix + "(untold)" annotation as "Untold"', () => {
     expect(classifyRoute({ route_short_name: '30U', route_long_name: 'Grigorescu - IRA' }))
-      .toEqual([{ id: 'festival', label: 'Untold' }]);
-    // M26U is also metroline (M* prefix) -> 1:many.
+      .toEqual([{ id: 'festival', label: 'Untold', priority: 3 }]);
+    // M26U is also metroline (M* prefix) -> 1:many. With the
+    // reordered CATEGORIES (everyday-first), metroline (priority 1)
+    // comes before festival (priority 3).
     expect(classifyRoute({
       route_short_name: 'M26U',
       route_long_name: 'Uzinei Electrice - Floresti / Cetate (untold)',
     })).toEqual([
-      { id: 'festival', label: 'Untold' },
-      { id: 'metroline', label: 'Metropolitan' },
+      { id: 'metroline', label: 'Metropolitan', priority: 1 },
+      { id: 'festival', label: 'Untold', priority: 3 },
     ]);
     expect(classifyRoute({ route_short_name: '30U', route_long_name: 'Grigorescu - IRA Untold' }))
-      .toEqual([{ id: 'festival', label: 'Untold' }]);
+      .toEqual([{ id: 'festival', label: 'Untold', priority: 3 }]);
     expect(classifyRoute({ route_short_name: '99', route_long_name: '', route_desc: 'Untold festival' }))
-      .toEqual([{ id: 'festival', label: 'Untold' }]);
+      .toEqual([{ id: 'festival', label: 'Untold', priority: 3 }]);
   });
 
   it('classifies *N suffix + "Noapte" long_name as "Noapte"', () => {
     expect(classifyRoute({ route_short_name: '25N', route_long_name: 'Str. Bucium - Str. Unirii' }))
-      .toEqual([{ id: 'night', label: 'Noapte' }]);
+      .toEqual([{ id: 'night', label: 'Noapte', priority: 0 }]);
     expect(classifyRoute({ route_short_name: '5N', route_long_name: 'Noapte Traian Vuia' }))
-      .toEqual([{ id: 'night', label: 'Noapte' }]);
+      .toEqual([{ id: 'night', label: 'Noapte', priority: 0 }]);
     expect(classifyRoute({ route_short_name: '99', route_long_name: '', route_desc: 'Noapte special' }))
-      .toEqual([{ id: 'night', label: 'Noapte' }]);
+      .toEqual([{ id: 'night', label: 'Noapte', priority: 0 }]);
   });
 
   it('classifies A1 / Aeroport long_name as "Aeroport Expres"', () => {
     expect(classifyRoute({ route_short_name: 'A1', route_long_name: 'Piata Mihai Viteazu - Aeroport' }))
-      .toEqual([{ id: 'airport', label: 'Aeroport Expres' }]);
+      .toEqual([{ id: 'airport', label: 'Aeroport Expres', priority: 2 }]);
     expect(classifyRoute({ route_short_name: '99', route_long_name: 'Some Route Aeroport Expres' }))
-      .toEqual([{ id: 'airport', label: 'Aeroport Expres' }]);
+      .toEqual([{ id: 'airport', label: 'Aeroport Expres', priority: 2 }]);
     expect(classifyRoute({ route_short_name: '99', route_long_name: '', route_desc: 'aeroport shuttle' }))
-      .toEqual([{ id: 'airport', label: 'Aeroport Expres' }]);
+      .toEqual([{ id: 'airport', label: 'Aeroport Expres', priority: 2 }]);
   });
 
   it('does NOT classify D51 as commuter (D51 is employee-only / convention, not public commuter)', () => {
@@ -143,30 +145,32 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
 
   it('classifies M* (non-school) as "Metropolitan"', () => {
     expect(classifyRoute({ route_short_name: 'M11', route_long_name: 'P-ta Cipariu - Feleacu' }))
-      .toEqual([{ id: 'metroline', label: 'Metropolitan' }]);
+      .toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1 }]);
     expect(classifyRoute({ route_short_name: 'M26', route_long_name: 'Floresti - Cluj Napoca' }))
-      .toEqual([{ id: 'metroline', label: 'Metropolitan' }]);
+      .toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1 }]);
   });
 
   it('classifies CS as "Cursa Speciala"', () => {
     expect(classifyRoute({ route_short_name: 'CS', route_long_name: 'CURSA SPECIALA' }))
-      .toEqual([{ id: 'special', label: 'Cursa Speciala' }]);
+      .toEqual([{ id: 'special', label: 'Cursa Speciala', priority: 4 }]);
     expect(classifyRoute({ route_short_name: 'CS', route_long_name: '', route_desc: 'CURSA SPECIALA' }))
-      .toEqual([{ id: 'special', label: 'Cursa Speciala' }]);
+      .toEqual([{ id: 'special', label: 'Cursa Speciala', priority: 4 }]);
   });
 
   it('returns 1:many tag list for routes that match multiple tags (festival + metroline)', () => {
     // The canonical 1:many tag case: M26U-like routes. school is a
     // network (not a tag), so the 1:many here is purely on the tag
     // surface. M26U is in the normal network (no TE prefix anywhere).
+    // With the reordered CATEGORIES (everyday-first), metroline
+    // (priority 1) comes before festival (priority 3).
     const result = classifyRoute({
       route_short_name: 'M26U',
       route_long_name: 'Uzinei Electrice - Floresti / Cetate (untold)',
       route_desc: 'Untold',
     });
     expect(result).toEqual([
-      { id: 'festival', label: 'Untold' },
-      { id: 'metroline', label: 'Metropolitan' },
+      { id: 'metroline', label: 'Metropolitan', priority: 1 },
+      { id: 'festival', label: 'Untold', priority: 3 },
     ]);
   });
 
@@ -185,24 +189,67 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
 
   it('respects priority order (matches in CATEGORIES tag order)', () => {
     // 1:many results preserve CATEGORIES declaration order (filtered
-    // to tag-surface entries). `special` is declared first, then
-    // (school -- excluded, network), `festival`, `night`, `airport`,
-    // `metroline`. `normal` is at the end (also excluded, network).
+    // to tag-surface entries). Editorial choice: every-day first
+    // (night, metroline, airport -- the route's typical identity),
+    // then event overlays (festival, special -- rarer). The
+    // `surface: 'network'` entries (`school` and `normal`) are
+    // excluded from TAG_ENTRIES -- they're a separate surface
+    // driven by networks.txt, not tags.
     const tagIds = CATEGORIES.filter((c) => c.surface === 'tag').map((c) => c.id);
-    expect(tagIds).toEqual(['special', 'festival', 'night', 'airport', 'metroline']);
-    // For a festival + metroline 1:many case, festival comes first
-    // because it's declared earlier than metroline in CATEGORIES.
+    expect(tagIds).toEqual(['night', 'metroline', 'airport', 'festival', 'special']);
+    // For a festival + metroline 1:many case, metroline (priority 1)
+    // comes BEFORE festival (priority 3) because metroline is
+    // declared earlier in CATEGORIES. Sort by priority ASCENDING
+    // is the editorial choice for "primary identity first, event
+    // overlay after".
     const result = classifyRoute({
       route_short_name: 'M26U',
       route_long_name: 'Floresti / Cetate (untold)',
     });
-    expect(result.map((c) => c.id)).toEqual(['festival', 'metroline']);
+    expect(result.map((c) => c.id)).toEqual(['metroline', 'festival']);
   });
 
   it('treats missing/undefined fields as empty strings', () => {
     expect(() => classifyRoute({})).not.toThrow();
     expect(classifyRoute({})).toEqual([]);
     expect(classifyNetwork({})).toEqual({ id: 'normal', label: 'Normal' });
+  });
+
+  it('stamps priority as the TAGS-declaration index (1:1 case)', () => {
+    // Regression: the previous implementation wrote the
+    // per-route-array index, which is always 0 for 1:1 routes
+    // regardless of which tag the route had. Consumers sorting
+    // by priority couldn't distinguish a 1:1 metroline route
+    // from a 1:1 festival route. This pins the TAGS-declaration
+    // index (position in TAG_ENTRIES, i.e. CATEGORIES filtered
+    // to surface === 'tag') for 1:1 cases of each of the 5
+    // current cluj tags.
+    const expectedPriorities: Record<string, number> = {
+      // TAG_INDEX values for the reordered CATEGORIES (see
+      // routeCategory.ts CATEGORIES JSDoc). Tag entries only
+      // (school + normal are network-only, filtered out).
+      night: 0,      // CATEGORIES index 0
+      metroline: 1,  // CATEGORIES index 1
+      airport: 2,    // CATEGORIES index 2
+      festival: 3,   // CATEGORIES index 3
+      special: 4,    // CATEGORIES index 4
+    };
+    // For each tag, build a route that matches ONLY that tag and
+    // assert the priority. The 1-tag-only inputs below are chosen
+    // so they match exactly one predicate each.
+    const inputs: Array<{ tag: string; row: Parameters<typeof classifyRoute>[0] }> = [
+      { tag: 'special',  row: { route_short_name: 'CS', route_long_name: 'Cursa speciala X', route_desc: '' } },
+      { tag: 'festival', row: { route_short_name: '30U', route_long_name: 'Floresti - Centru (untold)', route_desc: '' } },
+      { tag: 'night',    row: { route_short_name: '25N', route_long_name: 'str. X - str. Y (noapte)', route_desc: '' } },
+      { tag: 'airport',  row: { route_short_name: 'A5',  route_long_name: 'Piata Garii - Aeroport',     route_desc: '' } },
+      { tag: 'metroline',row: { route_short_name: 'M26', route_long_name: 'M26 Floresti - Centru',       route_desc: '' } },
+    ];
+    for (const { tag, row } of inputs) {
+      const result = classifyRoute(row);
+      expect(result.length).toBe(1);
+      expect(result[0]?.id).toBe(tag);
+      expect(result[0]?.priority).toBe(expectedPriorities[tag]);
+    }
   });
 });
 
@@ -500,7 +547,7 @@ describe('applyRouteCategory -- orchestrator entry point', () => {
     // route_desc is comma-separated in CATEGORIES order: festival
     // first, metroline second. School is NOT in the comma-join
     // (school is a network, not a tag).
-    expect(routes[0].route_desc).toBe('Untold, Metropolitan');
+    expect(routes[0].route_desc).toBe('Metropolitan, Untold');
   });
 
   it('falls back to stop_times when long_name is empty after cleanup', () => {
@@ -688,8 +735,16 @@ describe('applyRouteCategory -- desc strategy + empty-desc fallback', () => {
     const result = applyRouteCategory({ routes, warnings });
     // Network = school (broad match); tag = [metroline].
     expect(result.routeNetworks.get('144')).toEqual({ id: 'school', label: 'Transport Elevi' });
+    // priority = 4 (TAGS-declaration index of `metroline` in
+    // TAG_ENTRIES, after `special` (0), `festival` (1), `night`
+    // (2), `airport` (3) are filtered out). The previous
+    // implementation wrote the per-route-array index, which
+    // is always 0 for 1:1 routes — that was indistinguishable
+    // from 1:1 special / festival / night / airport (all
+    // priority 0), so consumers sorting by priority got no
+    // signal. Issue #25 follow-up.
     expect(result.routeTags.get('144')).toEqual([
-      { id: 'metroline', label: 'Metropolitan', priority: 0 },
+      { id: 'metroline', label: 'Metropolitan', priority: 1 },
     ]);
     // long_name falls back to cleaned desc (parenthetical preserved).
     expect(routes[0].route_long_name).toBe('Avram Iancu (Floresti) - Liceul DumitruTautan');
@@ -927,8 +982,12 @@ describe('applyRouteCategory -- desc strategy + empty-desc fallback', () => {
     const result = applyRouteCategory({ routes, warnings });
     // Network = normal (M75B has no school signal).
     expect(result.routeNetworks.get('M75B')).toEqual({ id: 'normal', label: 'Normal' });
+    // priority = 4 (TAGS-declaration index; see comment in the
+    // M7x school test above). The previous per-route-array
+    // index was 0 for any 1:1 route, which made all 1:1 tags
+    // indistinguishable when sorted by priority.
     expect(result.routeTags.get('M75B')).toEqual([
-      { id: 'metroline', label: 'Metropolitan', priority: 0 },
+      { id: 'metroline', label: 'Metropolitan', priority: 1 },
     ]);
     // Tag label + non-redundant parenthetical joined with " | ".
     expect(routes[0].route_desc).toBe('Metropolitan | Floresti');
@@ -950,7 +1009,7 @@ describe('getAllCategories / getAllTags / getAllNetworks -- surface accessors', 
   it('getAllTags returns tag-surface entries only (excludes networks)', () => {
     const tags = getAllTags();
     const tagIds = tags.map((c) => c.id);
-    expect(tagIds).toEqual(['special', 'festival', 'night', 'airport', 'metroline']);
+    expect(tagIds).toEqual(['night', 'metroline', 'airport', 'festival', 'special']);
     for (const t of tags) {
       expect(t.surface).toBe('tag');
     }
@@ -959,7 +1018,7 @@ describe('getAllCategories / getAllTags / getAllNetworks -- surface accessors', 
   it('getAllNetworks returns network-surface entries only (school + normal)', () => {
     const nets = getAllNetworks();
     const netIds = nets.map((c) => c.id);
-    expect(netIds).toEqual(['school', 'normal']);
+    expect(netIds).toEqual(['normal', 'school']);
     for (const n of nets) {
       expect(n.surface).toBe('network');
     }
