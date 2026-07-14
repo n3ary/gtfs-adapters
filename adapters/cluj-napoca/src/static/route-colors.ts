@@ -35,7 +35,27 @@
  * no skews — the log line is just "no fixes needed".
  */
 
-type RouteRow = {
+import type { RouteRow as SpecRouteRow } from '@n3ary/gtfs-spec/spec';
+
+/** Loose input shape — route-colors runs on pre-validation rows
+ *  (raw CSV, manual JSON, test fixtures, foreign feed data). Spec's
+ *  `RouteRow` is the post-zod-parse shape with `route_id` and
+ *  `route_type` required and non-empty; this alias relaxes both
+ *  to optional and widens `route_type` (spec narrows to `string`,
+ *  but raw CSV / SQLite reader output can be `string | number | null`).
+ *  Any value satisfying the spec contract also satisfies this — the
+ *  spec `RouteRow` is a structural subset.
+ *
+ *  Implementation note: we can't write this as
+ *  `Partial<SpecRouteRow> & { route_type?: string | number | null }`
+ *  because TypeScript intersects optional fields rather than widening
+ *  them, so `route_type` collapses back to `string`. We also can't
+ *  use `Omit<Partial<SpecRouteRow>, 'route_type'>` because the
+ *  `passthrough()` index signature confuses the inference for
+ *  unrelated properties (TS reports them as `{}`). The cleanest
+ *  expression is `Partial<Omit<...>>` + explicit field redeclarations
+ *  to skip the index signature entirely. */
+type RouteRow = Partial<Omit<SpecRouteRow, 'route_type' | 'route_id' | 'route_color'>> & {
   route_id?: string;
   route_type?: string | number | null;
   route_color?: string | null;
