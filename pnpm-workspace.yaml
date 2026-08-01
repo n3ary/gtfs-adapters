@@ -1,6 +1,25 @@
 packages:
   - 'adapters/*'
 
+# Dependabot alerts — all transitive, no upstream range yet
+# admits a patched release. Closes alerts #1-2:
+#   #1 protobufjs     CVE-2026-59877 (DoS via infinite loop in
+#                    .proto option parsing) - 7.6.4 -> 7.6.5
+#   #2 brace-expansion CVE-2026-14257 (DoS via unbounded expansion
+#                    length) - both 2.1.1 and 5.0.7 -> patched
+# brace-expansion needs the per-major selector form: this repo's
+# lockfile pins two lines at once (2.x via CJS minimatch, 5.x via
+# ESM minimatch), and 5.x is ESM-only. A flat `^5.0.8` would break
+# the CJS consumer; selectors keep each line patched in place.
+# Drop these once ajv/tailwindcss (protobufjs via vite-plugin-pwa)
+# and the minimatch/glob path (brace-expansion) raise their own
+# ranges. See gtfs/pnpm-workspace.yaml for the single-line form
+# used in the upstream consumer.
+overrides:
+  protobufjs: ^7.6.5
+  brace-expansion@<3: 2.1.3
+  brace-expansion@>=3: 5.0.8
+
 # pnpm 11 blocks postinstall scripts by default. The cluj adapter
 # uses sharp (archiver zip writing) + esbuild (vitest/tsx binary
 # download) + protobufjs (gtfs-realtime-bindings needs it). Pre-
