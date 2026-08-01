@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  protobufjs: ^7.6.5
+  brace-expansion@<3: 2.1.3
+  brace-expansion@>=3: 5.0.8
+
 importers:
 
   .: {}
@@ -30,8 +35,8 @@ importers:
         specifier: ^10.6.0
         version: 10.6.0
       protobufjs:
-        specifier: ^7.4.0
-        version: 7.6.4
+        specifier: ^7.6.5
+        version: 7.6.5
       tsx:
         specifier: ^4.19.0
         version: 4.23.0
@@ -579,12 +584,12 @@ packages:
   bluebird@3.7.2:
     resolution: {integrity: sha512-XpNj6GDQzdfW+r2Wnn7xiSAd7TM3jzkxGXBGTtWKuSXv1xUV+azxAm8jdWZN06QTQk+2N2XB9jRDkvbmQmcRtg==}
 
-  brace-expansion@2.1.1:
-    resolution: {integrity: sha512-WR1cURNjuvBLMZBMbqM0UoE+WAfdUcEV1ccD8PVBVOI+Z3ND4+SZbN8RsfT2bMuG1qwz5RFvPukSZm5fF2D5eA==}
+  brace-expansion@2.1.3:
+    resolution: {integrity: sha512-DRdx5neNsG/QXbniLFWi2YmC/68oeOOmKz6zOjVk6ZS1ZLXgLIKqVEc6hWsmkjBbgii0SwaBTcJ5XKj5gzY/4A==}
 
-  brace-expansion@5.0.7:
-    resolution: {integrity: sha512-7oFy703dxfY3/NLxC1fh2SUCQ0H9rmAY+5EpDVfXjUTTs+HEwR2nYaqLv+GWcTsumwxPfiz6CzCNkwXwBUwqCA==}
-    engines: {node: 18 || 20 || >=22}
+  brace-expansion@5.0.8:
+    resolution: {integrity: sha512-JZyDyq3D4AUifKTPOB7DELf6XsB3WdPuNxCtob1vFXPsSXhdAiHBWJ/tJ8HAc9aH84BK+5JFZLNkJKx3G9kzQg==}
+    engines: {node: 20 || >=22}
 
   buffer-crc32@1.0.0:
     resolution: {integrity: sha512-Db1SbgBS/fg/392AblrMJk97KggmvYhr4pB5ZIMTWtaivCPMWLkmb7m21cJvpvgK+J3nsU2CmmixNBZx4vFj/w==}
@@ -1093,10 +1098,10 @@ packages:
     engines: {node: '>=12.0.0'}
     hasBin: true
     peerDependencies:
-      protobufjs: ^7.6.2
+      protobufjs: ^7.6.5
 
-  protobufjs@7.6.4:
-    resolution: {integrity: sha512-RJJPTTpvFfHcWLkIa2JFWK4XvtSzS0yEWDmunqHXli1h3JlkbcQZXDZdcWxv+JK3Xsl5/UFDPZ0iGm7DAengYw==}
+  protobufjs@7.6.5:
+    resolution: {integrity: sha512-/FPD0nUc9jH6rfFjji9IBqOz4pcSE3CsT1m7Ep6Mdb0LxSUMj8hgl6GomOvZzpNpAqqGaXA0P3VSrZLFzIhQrw==}
     engines: {node: '>=12.0.0'}
 
   punycode.js@2.3.1:
@@ -1770,11 +1775,11 @@ snapshots:
 
   bluebird@3.7.2: {}
 
-  brace-expansion@2.1.1:
+  brace-expansion@2.1.3:
     dependencies:
       balanced-match: 1.0.2
 
-  brace-expansion@5.0.7:
+  brace-expansion@5.0.8:
     dependencies:
       balanced-match: 4.0.4
 
@@ -2024,8 +2029,8 @@ snapshots:
 
   gtfs-realtime-bindings@1.1.1:
     dependencies:
-      protobufjs: 7.6.4
-      protobufjs-cli: 1.3.3(protobufjs@7.6.4)
+      protobufjs: 7.6.5
+      protobufjs-cli: 1.3.3(protobufjs@7.6.5)
 
   has-flag@4.0.0: {}
 
@@ -2189,11 +2194,11 @@ snapshots:
 
   minimatch@10.2.5:
     dependencies:
-      brace-expansion: 5.0.7
+      brace-expansion: 5.0.8
 
   minimatch@5.1.9:
     dependencies:
-      brace-expansion: 2.1.1
+      brace-expansion: 2.1.3
 
   minimist@1.2.8: {}
 
@@ -2263,7 +2268,7 @@ snapshots:
 
   process@0.11.10: {}
 
-  protobufjs-cli@1.3.3(protobufjs@7.6.4):
+  protobufjs-cli@1.3.3(protobufjs@7.6.5):
     dependencies:
       chalk: 4.1.2
       escodegen: 1.14.3
@@ -2272,12 +2277,12 @@ snapshots:
       glob: 8.1.0
       jsdoc: 4.0.5
       minimist: 1.2.8
-      protobufjs: 7.6.4
+      protobufjs: 7.6.5
       semver: 7.8.5
       tmp: 0.2.7
       uglify-js: 3.19.3
 
-  protobufjs@7.6.4:
+  protobufjs@7.6.5:
     dependencies:
       '@protobufjs/aspromise': 1.1.2
       '@protobufjs/base64': 1.1.2
