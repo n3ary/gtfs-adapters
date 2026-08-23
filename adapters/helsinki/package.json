@@ -1,0 +1,63 @@
+{
+  "name": "@n3ary/gtfs-adapter-helsinki",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Helsinki (HSL) GTFS adapter -- per-feed knowledge for the n3ary family. Fetches HSL's daily-published GTFS zip, normalizes it for the n3ary pipeline, and registers HSL-specific RT quirks (composite trip_id, vehicle_id format) with the generic gtfs-rt proxy. See https://github.com/n3ary/gtfs-adapters.",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "main": "./dist/ingest/index.js",
+  "exports": {
+    "./ingest": {
+      "types": "./dist/ingest/index.d.ts",
+      "import": "./dist/ingest/index.js"
+    },
+    "./static": {
+      "types": "./dist/static/index.d.ts",
+      "import": "./dist/static/index.js"
+    },
+    "./rt": {
+      "types": "./dist/rt/index.d.ts",
+      "import": "./dist/rt/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "lint": "eslint src/ tests/",
+    "lint:fix": "eslint src/ tests/ --fix"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.5.2",
+  "publishConfig": {
+    "@n3ary:registry": "https://npm.pkg.github.com",
+    "registry": "https://npm.pkg.github.com"
+  },
+  "dependencies": {
+    "@n3ary/gtfs-spec": "^0.7.0",
+    "archiver": "^8.0.0",
+    "gtfs-realtime-bindings": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "eslint": "^10.6.0",
+    "protobufjs": "^7.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "4.1.9"
+  },
+  "keywords": [
+    "gtfs",
+    "transit",
+    "helsinki",
+    "hsl",
+    "digitransit"
+  ]
+}
