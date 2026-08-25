@@ -81,11 +81,17 @@ describe('reconcile', () => {
     expect(has).toBe(false);
   });
 
-  it('generates trip_ids in ${route}_${dir}_${serviceId}_${HHMM} format', async () => {
+  it('generates trip_ids in ${route}_${dir}_${serviceId}_${seq}_${HHMM} format', async () => {
     const { files } = await reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
     const tripLines = files['trips.txt'].split('\n').slice(1).filter(Boolean);
     expect(tripLines.length).toBeGreaterThan(0);
-    const tripIdRe = /^[A-Za-z0-9]+_[01]_(LV|S|D|LD)(?:_FREQ)?_\d{4}$/;
+    // 5-part format: <route>_<dir>_<serviceId>_<seq>_<HHMM>.
+    // The seq is a per-departures index (0, 1, 2, ...) - see
+    // makeTripId's JSDoc for the CTP-CSV-duplicate-time case.
+    // Frequency anchors use `_FREQ_` in place of the seq slot;
+    // they don't need a seq because the HHMM is a window-start and
+    // windows are unique per direction.
+    const tripIdRe = /^[A-Za-z0-9]+_[01]_(LV|S|D|LD)(?:_FREQ|_\d+)_\d{4}$/;
     for (const line of tripLines) {
       const cols = line.split(',');
       // trips.txt is now spec-driven: trip_id is the first column
@@ -95,8 +101,8 @@ describe('reconcile', () => {
       // serializer fixed that drift surface for free.
       const tripId = cols[0];
       // Format options:
-      //   <route>_<dir>_<serviceId>_<HHMM>          (regular trip)
-      //   <route>_<dir>_<serviceId>_FREQ_<HHMM>     (frequency anchor)
+      //   <route>_<dir>_<serviceId>_<seq>_<HHMM>          (regular trip)
+      //   <route>_<dir>_<serviceId>_FREQ_<seq>_<HHMM>     (frequency anchor)
       // route may contain letters (M26, 25N). HHMM is the tail
       // (4 digits, no colon) — required for neary's parseLiveStartMin
       // fallback. We do NOT claim parity with the live RT feed's IDs;
@@ -143,9 +149,9 @@ describe('reconcile', () => {
       if (!byTrip.has(tripId)) byTrip.set(tripId, []);
       byTrip.get(tripId).push({ stopId, sequence: seq });
     }
-    // For trip 35_0_LV_0600 (35 dir=0 LV service at 06:00), the stops
-    // are A, B, C with sequences 0, 1, 2 from the seed.
-    const trip0600 = byTrip.get('35_0_LV_0600');
+    // For trip 35_0_LV_0_0600 (35 dir=0 LV service at 06:00, seq=0),
+    // the stops are A, B, C with sequences 0, 1, 2 from the seed.
+    const trip0600 = byTrip.get('35_0_LV_0_0600');
     expect(trip0600).toBeDefined();
     const seqByStop = Object.fromEntries(trip0600.map((s) => [s.stopId, s.sequence]));
     expect(seqByStop.A).toBe(0);
@@ -415,6 +421,87 @@ describe('reconcile', () => {
     // doesn't contain "untold" post-strip. The classification uses the
     // cleaned long_name. So route 777 falls through to regular urban.
     // The point of this test is the fallback, not the classification.
+  });
+
+  it('emits distinct trip_ids when the CTP CSV repeats a departure time in one direction', async () => {
+    // Regression for the 2026-08-22 pipeline failure: CTP's
+    // orar_M21_lv.csv (route 63 LV) has "22:55" on two rows in dir0
+    // (lines 76-77), which is the operator publishing two buses at
+    // the same minute. The parser keeps both rows; the trip-emission
+    // loop used to call makeTripId(route, dir, svc, depTime) for
+    // each row, producing a duplicate trip_id, and the second
+    // emission appended a second 12-row stop_times block, breaking
+    // monotonicity. The makeTripId fix re-adds a per-`departures`
+    // seq (the index `i`) so each row gets a unique id.
+    //
+    // Mini fixture: one Tranzy route (short_name=88, dir0 only) with
+    // a 3-stop pattern, plus a CSV that lists the same minute twice
+    // in dir0. Assert: two distinct trip_ids, each with its own
+    // 3-stop block, sequences monotonic within each.
+    const tranzy = {
+      routes: [{ route_id: '888', route_short_name: '88', route_long_name: 'A - B', route_type: 3 }],
+      stops: [],
+      trips: [{ trip_id: 't-888', route_id: '888', direction_id: 0, trip_headsign: 'A' }],
+      stop_times: [
+        { trip_id: 't-888', stop_id: 'A', stop_sequence: 0 },
+        { trip_id: 't-888', stop_id: 'B', stop_sequence: 1 },
+        { trip_id: 't-888', stop_id: 'C', stop_sequence: 2 },
+      ],
+      shapes: [],
+      calendar: [],
+    };
+    const csvBody = `route_long_name,"A - B"
+service_name,"Luni - Vineri"
+service_start,"01.06.2026"
+in_stop_name,"A"
+out_stop_name,"B"
+06:00,06:30
+22:55,07:00
+22:55,07:30
+`;
+    const csvForDup = {
+      byRouteService: (() => {
+        const m = new Map();
+        m.set('88', new Map([['LV', parseCtpCsv(csvBody)]]));
+        return m;
+      })(),
+      warnings: [],
+    };
+    const { files } = await reconcile({
+      seed: buildFixtureSeedMemory(), tranzy, csv: csvForDup,
+      options: { buildDate: new Date('2026-06-29') },
+    });
+
+    // Two distinct trip_ids for the two 22:55 rows in dir0.
+    // The seq is the per-`departures` index, so for the CSV
+    //   06:00,06:30
+    //   22:55,07:00   <- dir0 dep #1
+    //   22:55,07:30   <- dir0 dep #2
+    // the three dir0 trips are seq 0 (06:00), seq 1 (22:55 #1),
+    // seq 2 (22:55 #2). The 22:55 pair is what we care about: the
+    // two of them must differ in the seq slot and each must own its
+    // own monotonic 0,1,2 stop_times block.
+    const tripLines = files['trips.txt'].split('\n').slice(1).filter(Boolean);
+    const dupTrips = tripLines.filter((l) => /^888_0_LV_[12]_2255,/.test(l));
+    expect(dupTrips.length).toBe(2);
+    const ids = new Set(dupTrips.map((l) => l.split(',')[0]));
+    expect(ids.size).toBe(2);
+
+    // Each trip's stop_times are monotonic 0,1,2.
+    const stLines = files['stop_times.txt'].split('\n').slice(1).filter(Boolean);
+    for (const id of ids) {
+      const seqs = stLines
+        .filter((l) => l.split(',')[0] === id)
+        .map((l) => Number(l.split(',')[4]));
+      expect(seqs).toEqual([0, 1, 2]);
+    }
+
+    // Sanity: the earlier 06:00 departure still gets seq=0 (the
+    // index is into the dir0 departures array, not a per-depTime
+    // counter - a regression here would silently renumber earlier
+    // trips and break downstream consumers that key on trip_id).
+    const tripAt6 = tripLines.find((l) => l.startsWith('888_0_LV_0_0600,'));
+    expect(tripAt6).toBeDefined();
   });
 });
 
