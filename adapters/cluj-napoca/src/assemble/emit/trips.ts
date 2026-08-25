@@ -576,7 +576,15 @@ export function reconcileTripsAndStopTimes(input) {
 
         for (let i = 0; i < departures.length; i++) {
           const depTime = departures[i];
-          const tripId = makeTripId(routeId, dir, serviceId, depTime);
+          // `i` (the index in this departure list) disambiguates the
+          // rare CSV rows where the same time appears twice in the same
+          // direction - e.g. CTP's M21 LV dir0 has 22:55 on two rows
+          // (lines 76-77 of orar_M21_lv.csv), which is the operator
+          // publishing two buses at the same minute. Without `i`, the
+          // second emission would generate a duplicate trip_id, append
+          // a second 12-row stop_times block, and the validate step
+          // catches the resulting 11->0 sequence jump.
+          const tripId = makeTripId(routeId, dir, serviceId, depTime, i);
           const shapeId = pattern.shapeId || `${routeId}_${dir}`;
           tripRows.push({
             route_id: routeId,
@@ -688,48 +696,59 @@ function findRouteByShortName(routesByRouteId, shortName) {
 /**
  * Trip ID for this adapter's static feed.
  *
- * Format: `${routeId}_${dir}_${serviceId}_${HHMM}` — e.g. `M26_0_LV_0721`.
+ * Format: `${routeId}_${dir}_${serviceId}_${seq}_${HHMM}` -
+ * e.g. `M26_0_LV_2_0721`. The `${seq}` is a per-`departures` index
+ * (0, 1, 2, ...), not the operator's published run number - but its
+ * purpose is the same: disambiguate rows where the same departure
+ * minute appears more than once in the CSV.
  *
- * Why this format (and why NOT the full `route_dir_service_run_HHMM`):
+ * Why the seq is load-bearing (and the prior 4-part format was not):
+ *   CTP's published timetables sometimes list the same departure time
+ *   on two rows in the same direction column - the operator
+ *   intentionally running two buses at the same minute. The CSV
+ *   parser doesn't dedupe, so without the seq the second row produced
+ *   a duplicate `trip_id`. The trip-emission loop then appended a
+ *   second full stop_times block to that trip, which made the
+ *   stop_sequence go 0,1,2,...,11,0,1,2,...,11 - and the validate step
+ *   failed the whole pipeline with "non-monotonic stop_sequence
+ *   (11 -> 0)". First observed on the daily cron on 2026-08-22, after
+ *   the seq was removed in a prior "shorten trip_ids" cleanup.
  *
- *   - **The reconciler in `neary` does NOT use trip_id for the JOIN.**
- *     `neary/src/lib/domain/reconcile.ts` matches live observations to
- *     scheduled trips by `(routeId, directionId, tripStartMin)` with
- *     adaptive tolerance — explicitly noting that static and GTFS-RT
- *     trip_ids drift ~23% of the time because Transitous, Tranzy, and
- *     the GTFS-RT feed each generate trip_ids from independent
- *     dispatch databases. See that file's header comment for context.
+ * Why the other 4-part format was tried and why it failed:
+ *   `${routeId}_${dir}_${serviceId}_${hhmm}` looked fine in the
+ *   fixture data and in the validate self-check (which only matches
+ *   the `_HHMM` tail), but it had no per-run slot to absorb a CSV
+ *   collision. The seq was reinstated the moment the validate
+ *   started firing in prod.
  *
- *   - **Neary's `parseLiveStartMin` does extract HHMM from trip_id
- *     tails** as a fallback when `TripDescriptor.start_time` is
- *     missing — `_(\d{3,4})$` regex on the suffix. So our static
- *     trip_ids ending in `_HHMM` lets neary's fallback work if it
- *     ever runs against our zip directly. The HHMM tail is the only
- *     structural requirement we have to satisfy.
+ * Why the reconciler in `neary` does NOT care:
+ *   `neary/src/lib/domain/reconcile.ts` matches live observations to
+ *   scheduled trips by `(routeId, directionId, tripStartMin)` with
+ *   adaptive tolerance - it never compares trip_ids by string
+ *   equality. Static and GTFS-RT trip_ids drift ~23% of the time
+ *   because Transitous, Tranzy, and the RT feed each generate them
+ *   from independent dispatch databases. So the seq here is invisible
+ *   to the JOIN.
  *
- *   - **Neary's `resolveDirectionId` parses direction from RT trip_ids**
- *     via `/^\d+_(\d)_/`. Our static trip_ids DON'T need to satisfy
- *     this — neary doesn't try to extract direction from static IDs.
- *
- *   - **No "matches cluj-rt-feed" claim.** The RT feed uses Tranzy's
- *     internal route_ids (e.g. `45` for route 45, `92` for M26) while
- *     our static feed uses Transitous's IDs (the same `45` for route
- *     45, but `M26` for M26). So even the same trip will have a
- *     different prefix in static vs RT — by design.
- *
- * The `${seq}` (run number) we used to include was never consumed by
- * anyone — dropped to keep trip_ids short and readable.
+ * What the seq MUST NOT break:
+ *   1. `neary`'s `parseLiveStartMin` fallback extracts HHMM from the
+ *      trip_id tail with `_(\d{3,4})$`. HHMM is still last -> the
+ *      fallback still works.
+ *   2. `verify-trip-id-format.ts` enforces `_\\d{4}$`. Same.
+ *   3. `clujQuirk` (in `src/rt/cluj.ts`) parses the LIVE RT feed's
+ *      trip_ids, not static - different format, different concern.
  *
  * @param {string} routeId
  * @param {number} dir
  * @param {string} serviceId
  * @param {string} depTime  "HH:MM" or "HH:MM:SS" or "HH+24:MM"
+ * @param {number} seq       per-`departures` index (0-based)
  */
-export function makeTripId(routeId, dir, serviceId, depTime) {
+export function makeTripId(routeId, dir, serviceId, depTime, seq) {
   // depTime is "HH:MM" or "HH:MM:SS" (possibly "HH+24:MM" from post-midnight
   // wrap). Strip colons; strip the "+24" infix so 25:30 doesn't double up.
   const hhmm = depTime.replace(':', '').replace('+24', '');
-  return `${routeId}_${dir}_${serviceId}_${hhmm}`;
+  return `${routeId}_${dir}_${serviceId}_${seq}_${hhmm}`;
 }
 
 function hhmmToSeconds(hhmm) {
