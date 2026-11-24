@@ -2,13 +2,13 @@
 # [check] PR validation (on PR)
 #
 # Validates every PR: shared ASCII + standards-drift checks, repo-specific
-# check + test per adapter (matrix). Never pushes to the branch.
+# check + lint + test per adapter (matrix). Never pushes to the branch.
 #
 # Trigger:     pull_request
 # Permissions: contents: read
 # Secrets:     NPM_TOKEN (for pnpm install from GH Packages)
 # Owner:       @ciotlosm
-# Run time:    ~2-4 min
+# Run time:    ~3-5 min
 # ----------------------------------------------------------------------------
 name: '[check] PR validation (on PR)'
 
@@ -62,6 +62,11 @@ jobs:
 
       - name: Check (matrix adapter)
         run: pnpm --filter @n3ary/gtfs-adapter-${{ matrix.adapter }} check
+
+      - name: Lint (matrix adapter)
+        # Biome is installed once at the workspace root; the adapter script
+        # runs `biome check src tests` with the root biome.json config.
+        run: pnpm --filter @n3ary/gtfs-adapter-${{ matrix.adapter }} lint
 
       - name: Test (matrix adapter)
         run: pnpm --filter @n3ary/gtfs-adapter-${{ matrix.adapter }} test

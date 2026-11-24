@@ -30,8 +30,8 @@
     "smoke:trip-ids": "tsx src/verify-trip-id-format.ts",
     "test": "vitest --run",
     "test:watch": "vitest",
-    "lint": "eslint src/ tests/",
-    "lint:fix": "eslint src/ tests/ --fix"
+    "lint": "biome check src tests",
+    "lint:fix": "biome check --write src tests"
   },
   "engines": {
     "node": ">=24"
@@ -49,7 +49,6 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "eslint": "^10.6.0",
     "protobufjs": "^7.4.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
