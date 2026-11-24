@@ -98,8 +98,15 @@ async function main() {
     exit(2);
   }
 
-  const lines = tripsTxt.split('\n').slice(1).filter(Boolean);
-  const ids = lines.map((l) => l.split(',')[2]).filter(Boolean);
+  // Column order comes from the spec's TripRowSchema, which puts
+  // `trip_id` first - resolve the index from the header row instead of
+  // hardcoding one, so the check does not silently read the wrong
+  // column (it used to read index 2, which is `service_id`).
+  const [headerLine = '', ...rows] = tripsTxt.split('\n').filter(Boolean);
+  const headerCols = headerLine.split(',');
+  const tripIdCol = headerCols.indexOf('trip_id');
+  const col = Math.max(tripIdCol, 0);
+  const ids = rows.map((l) => l.split(',')[col]).filter(Boolean);
   console.log(`[trip-ids] found ${ids.length} trip_ids in trips.txt`);
 
   const mismatches = ids.filter((id) => !re.test(id) && !NT_RE.test(id));
