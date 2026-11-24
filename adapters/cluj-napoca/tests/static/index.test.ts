@@ -21,7 +21,7 @@
  * expects.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { producerExtensions, staticExtension } from '../../src/static/index.ts';
 
 describe('static subpath barrel', () => {

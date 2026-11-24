@@ -60,8 +60,8 @@ export function pickSpeedBucket(originMinOfDay, timing) {
   const inWrappingWindow = (from, to) => {
     const f = hhmmToMin(from);
     const tt = hhmmToMin(to);
-    if (f <= tt) return t >= f && t < tt;       // same-day window
-    return t >= f || t < tt;                    // wraps midnight
+    if (f <= tt) return t >= f && t < tt; // same-day window
+    return t >= f || t < tt; // wraps midnight
   };
 
   if (timing.nightWindow && inWrappingWindow(timing.nightWindow.from, timing.nightWindow.to)) {
@@ -107,7 +107,13 @@ export function pickSpeedBucket(originMinOfDay, timing) {
 export function computeStopTimes({ startSec, stops, shape, timing }) {
   const n = stops.length;
   if (n === 0) {
-    return { arrivals: [], departures: [], shapeDistTraveledM: [], speedBucket: 'offpeak', speedKmh: timing.speedKmh.offpeak };
+    return {
+      arrivals: [],
+      departures: [],
+      shapeDistTraveledM: [],
+      speedBucket: 'offpeak',
+      speedKmh: timing.speedKmh.offpeak,
+    };
   }
   if (n === 1) {
     return {

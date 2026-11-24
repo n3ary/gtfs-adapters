@@ -13,29 +13,28 @@
  * computed columns, and other schedule-pipeline concerns only.
  */
 
+export type {
+  ColumnExtension,
+  ComputedUpdates,
+  ExtensionContext,
+  FillComputedColumnsHook,
+  StaticExtension,
+  TableExtension,
+} from './extension.ts';
 export {
-  staticExtension,
   applyStaticPostLoad,
   producerExtensions,
   type StaticExtensionFeedConfig,
-} from './extension.ts';
-
-export type {
-  StaticExtension,
-  ColumnExtension,
-  TableExtension,
-  ExtensionContext,
-  FillComputedColumnsHook,
-  ComputedUpdates,
+  staticExtension,
 } from './extension.ts';
 
 export {
-  normalizeColor,
-  computeTypeTopColors,
-  resolveRouteColor,
-  resolveModalCollisions,
-  resolveRouteColors,
   computeNetworkColors,
-  rotateHueOklch,
+  computeTypeTopColors,
+  normalizeColor,
   oklabDistance,
+  resolveModalCollisions,
+  resolveRouteColor,
+  resolveRouteColors,
+  rotateHueOklch,
 } from './route-colors.ts';

@@ -1,5 +1,5 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
-import { RouteRowSchema, serializeRows, type RouteRow } from '@n3ary/gtfs-spec/spec';
+import { type RouteRow, RouteRowSchema, serializeRows } from '@n3ary/gtfs-spec/spec';
 /**
  * Routes reconciliation.
  *
@@ -74,16 +74,16 @@ const PLACEHOLDER_COLORS = new Set([...TRANZY_BLACK_SENTINELS, ...GENERIC_PLACEH
 // arithmetic is small and the constants are stable reference values.
 
 function hexToRgb(hex) {
-  return [
-    parseInt(hex.slice(0, 2), 16),
-    parseInt(hex.slice(2, 4), 16),
-    parseInt(hex.slice(4, 6), 16),
-  ];
+  return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
 }
 
 function rgbToHex([r, g, b]) {
   return [r, g, b]
-    .map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0'))
+    .map((v) =>
+      Math.max(0, Math.min(255, Math.round(v)))
+        .toString(16)
+        .padStart(2, '0'),
+    )
     .join('')
     .toUpperCase();
 }
@@ -99,9 +99,7 @@ function linearToSrgb(c) {
   // badge colors. For more rigorous gamut handling we'd reduce chroma
   // until in-gamut — not worth it here.
   const clamped = Math.max(0, Math.min(1, c));
-  const v = clamped <= 0.0031308
-    ? 12.92 * clamped
-    : 1.055 * clamped ** (1 / 2.4) - 0.055;
+  const v = clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * clamped ** (1 / 2.4) - 0.055;
   return v * 255;
 }
 
@@ -116,23 +114,23 @@ function rgbToOklab([R, G, B]) {
   const m_ = Math.cbrt(m);
   const s_ = Math.cbrt(s);
   return [
-    0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
-    1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
-    0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+    0.2104542553 * l_ + 0.793617785 * m_ - 0.0040720468 * s_,
+    1.9779984951 * l_ - 2.428592205 * m_ + 0.4505937099 * s_,
+    0.0259040371 * l_ + 0.7827717662 * m_ - 0.808675766 * s_,
   ];
 }
 
 function oklabToRgb([L, a, b]) {
   const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
   const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
-  const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+  const s_ = L - 0.0894841775 * a - 1.291485548 * b;
   const lin_l = l_ ** 3;
   const lin_m = m_ ** 3;
   const lin_s = s_ ** 3;
   return [
-    linearToSrgb( 4.0767416621 * lin_l - 3.3077115913 * lin_m + 0.2309699292 * lin_s),
+    linearToSrgb(4.0767416621 * lin_l - 3.3077115913 * lin_m + 0.2309699292 * lin_s),
     linearToSrgb(-1.2684380046 * lin_l + 2.6097574011 * lin_m - 0.3413193965 * lin_s),
-    linearToSrgb(-0.0041960863 * lin_l - 0.7034186147 * lin_m + 1.7076147010 * lin_s),
+    linearToSrgb(-0.0041960863 * lin_l - 0.7034186147 * lin_m + 1.707614701 * lin_s),
   ];
 }
 
@@ -201,9 +199,8 @@ function findSafeRotation(baseColor, idealDegrees, forbiddenColors) {
   let bestMinDist = -Infinity;
   for (const deg of candidates) {
     const candidate = rotateHueOklch(baseColor, deg);
-    const minDist = forbidden.length === 0
-      ? Infinity
-      : Math.min(...forbidden.map((fc) => oklabDistance(candidate, fc)));
+    const minDist =
+      forbidden.length === 0 ? Infinity : Math.min(...forbidden.map((fc) => oklabDistance(candidate, fc)));
     if (minDist >= OKLAB_DISTINCT_THRESHOLD) {
       return { color: candidate, degrees: deg };
     }
@@ -245,11 +242,7 @@ function resolveModalCollisions(typeTopColors, routeCountAtModal, allRouteColors
   const skews = [];
   for (const [color, types] of byColor) {
     if (types.length < 2) continue;
-    types.sort(
-      (a, b) =>
-        (routeCountAtModal.get(b) ?? 0) - (routeCountAtModal.get(a) ?? 0) ||
-        Number(a) - Number(b),
-    );
+    types.sort((a, b) => (routeCountAtModal.get(b) ?? 0) - (routeCountAtModal.get(a) ?? 0) || Number(a) - Number(b));
     const N = types.length;
     const step = 360 / N;
     // Forbidden = every catalog color except the one we're rotating
@@ -294,7 +287,10 @@ function computeTypeTopColors(tranzyRoutes) {
     let bestColor = '';
     let bestCount = 0;
     for (const [color, n] of inner) {
-      if (n > bestCount) { bestCount = n; bestColor = color; }
+      if (n > bestCount) {
+        bestCount = n;
+        bestColor = color;
+      }
     }
     if (bestColor) top.set(type, bestColor);
   }
@@ -372,9 +368,7 @@ export function reconcileRoutes({ seed, tranzy, warnings }) {
     }
     colorSubstitutions.get(routeType)[reason]++;
   };
-  const typeTopColors = tranzy && Array.isArray(tranzy.routes)
-    ? computeTypeTopColors(tranzy.routes)
-    : new Map();
+  const typeTopColors = tranzy && Array.isArray(tranzy.routes) ? computeTypeTopColors(tranzy.routes) : new Map();
   if (tranzy && Array.isArray(tranzy.routes)) {
     for (const r of tranzy.routes) {
       const id = r.route_id ? String(r.route_id) : null;
@@ -385,8 +379,7 @@ export function reconcileRoutes({ seed, tranzy, warnings }) {
       // `?? '3'` not `?` — the GTFS enum 0 (tram) is a valid value that
       // `?` would treat as missing and demote to bus.
       const routeType = String(r.route_type ?? '3');
-      const { color: routeColor, substitutedFrom } =
-        resolveRouteColor(r.route_color, routeType, typeTopColors);
+      const { color: routeColor, substitutedFrom } = resolveRouteColor(r.route_color, routeType, typeTopColors);
       if (substitutedFrom) tallySub(routeType, substitutedFrom);
       const row = {
         route_id: id,
@@ -445,8 +438,7 @@ export function reconcileRoutes({ seed, tranzy, warnings }) {
     // Transitous-only route (Tranzy doesn't have it).
     if (byRouteId.has(r.routeId)) continue;
     const seedType = String(r.type ?? '3');
-    const { color: seedColor, substitutedFrom } =
-      resolveRouteColor(r.color, seedType, typeTopColors);
+    const { color: seedColor, substitutedFrom } = resolveRouteColor(r.color, seedType, typeTopColors);
     if (substitutedFrom) tallySub(seedType, substitutedFrom);
     const row = {
       route_id: String(r.routeId),
@@ -499,11 +491,15 @@ export function reconcileRoutes({ seed, tranzy, warnings }) {
   // already in routes.txt, so grepping is enough for auditing.
   if (tranzyAdded > 0) {
     const onlyInTranzy = tranzyAdded - tranzyUpgradedToTransitousId;
-    warnings.push(info(
-      `routes: Tranzy primary catalog — ${tranzyAdded} routes total` +
-      (onlyInTranzy > 0 ? `, ${onlyInTranzy} Tranzy-only` : '') +
-      (tranzyUpgradedToTransitousId > 0 ? `, ${tranzyUpgradedToTransitousId} shared with Transitous (re-keyed to Transitous route_id for downstream stability)` : ''),
-    ));
+    warnings.push(
+      info(
+        `routes: Tranzy primary catalog — ${tranzyAdded} routes total` +
+          (onlyInTranzy > 0 ? `, ${onlyInTranzy} Tranzy-only` : '') +
+          (tranzyUpgradedToTransitousId > 0
+            ? `, ${tranzyUpgradedToTransitousId} shared with Transitous (re-keyed to Transitous route_id for downstream stability)`
+            : ''),
+      ),
+    );
   }
   if (transitousOnlyAdded > 0) {
     warnings.push(info(`routes: ${transitousOnlyAdded} Transitous-only (Tranzy missing)`));
@@ -523,15 +519,17 @@ export function reconcileRoutes({ seed, tranzy, warnings }) {
     };
     const placeholderBreakdown = renderBreakdown('placeholder');
     if (placeholderBreakdown) {
-      warnings.push(info(
-        `routes: substituted placeholder route_color (000000 sentinel) with modal per-type color — ${placeholderBreakdown}`,
-      ));
+      warnings.push(
+        info(
+          `routes: substituted placeholder route_color (000000 sentinel) with modal per-type color — ${placeholderBreakdown}`,
+        ),
+      );
     }
     const invalidBreakdown = renderBreakdown('invalid');
     if (invalidBreakdown) {
-      warnings.push(info(
-        `routes: substituted invalid/missing route_color with modal per-type color — ${invalidBreakdown}`,
-      ));
+      warnings.push(
+        info(`routes: substituted invalid/missing route_color with modal per-type color — ${invalidBreakdown}`),
+      );
     }
   }
 
@@ -572,10 +570,12 @@ export function reconcileRoutes({ seed, tranzy, warnings }) {
         const label = TYPE_LABELS[Number(s.type)] ?? `type=${s.type}`;
         return `${label} #${s.fromColor} → #${s.toColor}`;
       });
-      warnings.push(info(
-        `routes: modal route_color collision resolved by OKLCh hue rotation — ${parts.join(', ')}. ` +
-        `Type with the most routes at the colliding color kept it; others were skewed to maximize perceptual separation.`,
-      ));
+      warnings.push(
+        info(
+          `routes: modal route_color collision resolved by OKLCh hue rotation — ${parts.join(', ')}. ` +
+            `Type with the most routes at the colliding color kept it; others were skewed to maximize perceptual separation.`,
+        ),
+      );
     }
   }
 

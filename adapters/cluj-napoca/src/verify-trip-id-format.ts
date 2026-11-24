@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 // @ts-nocheck — operational script, not part of the library surface. Migrated to .ts
 // for the same tooling (tsc check, tsx run) as the rest of the package; full typing
 // is a follow-up since this file is downstream of the spec (it parses the .zip output
@@ -37,9 +38,9 @@
  *   2  zip not found / unreadable / trips.txt missing
  */
 
-import { argv, env, exit } from 'node:process';
-import { readFileSync, statSync, existsSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { argv, env, exit } from 'node:process';
 
 const DEFAULT_ZIP = join(process.cwd(), 'output', 'cluj-napoca.gtfs.zip');
 const HHMM_RE = /_\d{4}$/;
@@ -66,14 +67,19 @@ async function main() {
   try {
     const mod = await import('node-stream-zip');
     const zip = new mod.default({ file: zipPath, storeEntries: true });
-    tripsTxt = await zip.stream('trips.txt', (err, stream) => {
-      if (err) throw err;
-    }).then((stream) => new Promise((resolve, reject) => {
-      const chunks = [];
-      stream.on('data', (c) => chunks.push(c));
-      stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-      stream.on('error', reject);
-    }));
+    tripsTxt = await zip
+      .stream('trips.txt', (err, stream) => {
+        if (err) throw err;
+      })
+      .then(
+        (stream) =>
+          new Promise((resolve, reject) => {
+            const chunks = [];
+            stream.on('data', (c) => chunks.push(c));
+            stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+            stream.on('error', reject);
+          }),
+      );
     await zip.close();
   } catch (err) {
     // Fallback: shell out to unzip. Same as src/lib/seed.js does.
@@ -104,7 +110,9 @@ async function main() {
     console.error(`[trip-ids] FAIL: ${mismatches.length}/${ids.length} trip_ids do not end with _HHMM or _NTxxx`);
     for (const id of mismatches.slice(0, 10)) console.error(`  - ${id}`);
     if (mismatches.length > 10) console.error(`  ... and ${mismatches.length - 10} more`);
-    console.error(`[trip-ids] fix: src/assemble/emit/trips.js makeTripId() should produce IDs ending in _HHMM or _NTxxx`);
+    console.error(
+      `[trip-ids] fix: src/assemble/emit/trips.js makeTripId() should produce IDs ending in _HHMM or _NTxxx`,
+    );
     exit(1);
   }
 

@@ -46,7 +46,11 @@
  * @returns {CtpCsvSchedule | null}
  */
 export function parseCtpCsv(text) {
-  const lines = text.trim().split('\n').map((l) => l.trim()).filter((l) => l);
+  const lines = text
+    .trim()
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l);
   if (lines.length < 6) return null;
   const routeLongName = lines[0].split(',').slice(1).join(',').replace(/"/g, '');
   const serviceName = lines[1].split(',').slice(1).join(',').replace(/"/g, '');
@@ -70,7 +74,10 @@ export function parseCtpCsv(text) {
 
   for (let i = 5; i < lines.length; i++) {
     const parts = lines[i].split(',').map((p) => p.trim());
-    for (const [colIdx, colKey] of [[0, 'dir0'], [1, 'dir1']]) {
+    for (const [colIdx, colKey] of [
+      [0, 'dir0'],
+      [1, 'dir1'],
+    ]) {
       const cell = parts[colIdx];
       if (!cell) continue;
       const cls = classifyCell(cell);
@@ -109,18 +116,26 @@ export function parseCtpCsv(text) {
   // that service day. Flag it so downstream code can skip without
   // emitting "0 trips" warnings.
   const totalNonEmpty =
-    departures.dir0.length + departures.dir1.length +
-    frequencyAnnotations.dir0.ranges.length + frequencyAnnotations.dir0.headways.length +
-    frequencyAnnotations.dir1.ranges.length + frequencyAnnotations.dir1.headways.length +
-    suspended.length + annotations.length;
+    departures.dir0.length +
+    departures.dir1.length +
+    frequencyAnnotations.dir0.ranges.length +
+    frequencyAnnotations.dir0.headways.length +
+    frequencyAnnotations.dir1.ranges.length +
+    frequencyAnnotations.dir1.headways.length +
+    suspended.length +
+    annotations.length;
   if (totalNonEmpty > 0 && suspended.length === totalNonEmpty) {
     suspendedAllCells = true;
   }
 
   return {
-    routeLongName, serviceName, serviceStart,
-    inStopName, outStopName,
-    departures, frequencyAnnotations,
+    routeLongName,
+    serviceName,
+    serviceStart,
+    inStopName,
+    outStopName,
+    departures,
+    frequencyAnnotations,
     suspended,
     annotations,
     suspendedAllCells,
@@ -177,7 +192,7 @@ export function classifyCell(value) {
   if (rangeMinMatch) {
     const lo = parseInt(rangeMinMatch[1], 10);
     const hi = parseInt(rangeMinMatch[2], 10);
-    return { type: 'headway', minSec: lo * 60, maxSec: hi * 60, avgSec: Math.round((lo + hi) / 2 * 60) };
+    return { type: 'headway', minSec: lo * 60, maxSec: hi * 60, avgSec: Math.round(((lo + hi) / 2) * 60) };
   }
   const singleMinMatch = value.match(/^(\d{1,2})min$/);
   if (singleMinMatch) {
@@ -190,7 +205,7 @@ export function classifyCell(value) {
     const hi = parseInt(rangeNoUnit[2], 10);
     // Plausibility guard: minutes go up to ~120. Anything above is suspicious.
     if (lo <= 120 && hi <= 120 && lo < hi) {
-      return { type: 'headway', minSec: lo * 60, maxSec: hi * 60, avgSec: Math.round((lo + hi) / 2 * 60) };
+      return { type: 'headway', minSec: lo * 60, maxSec: hi * 60, avgSec: Math.round(((lo + hi) / 2) * 60) };
     }
   }
   // Suspended / not running — Romanian operators use various markers. The

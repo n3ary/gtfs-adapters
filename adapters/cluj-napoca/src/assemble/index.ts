@@ -16,19 +16,19 @@
  * Returns everything the zip writer needs in `src/gtfs.js`.
  */
 
-import { reconcileRoutes, routesToTxt } from './merge/routes.ts';
-import { reconcileStops, stopsToTxt } from './merge/stops.ts';
-import { reconcileShapes, shapesToTxt } from './merge/shapes.ts';
-import { reconcileTripsAndStopTimes, tripsToTxt, stopTimesToTxt } from './emit/trips.ts';
-import { reconcileFrequencies, frequenciesToTxt } from './derive/frequencies.ts';
-import { reconcileCalendar, calendarToTxt } from './derive/calendar.ts';
+import { info, warnMsg } from '../lib/log-severity.ts';
 import { runDataQualityChecks } from './check/data-quality.ts';
-import { tranzyPatternsByRouteDir, seedPatternsByRouteDir } from './derive/patterns.ts';
-import { reconcileTranzyFallback } from './emit/tranzy-fallback.ts';
+import { calendarToTxt, reconcileCalendar } from './derive/calendar.ts';
+import { frequenciesToTxt, reconcileFrequencies } from './derive/frequencies.ts';
+import { seedPatternsByRouteDir, tranzyPatternsByRouteDir } from './derive/patterns.ts';
 import { buildNetworks, formatNetworkUsageSummary } from './emit/networks.ts';
 import { buildRouteTags, formatRouteTagsSummary } from './emit/routeTags.ts';
+import { reconcileTranzyFallback } from './emit/tranzy-fallback.ts';
+import { reconcileTripsAndStopTimes, stopTimesToTxt, tripsToTxt } from './emit/trips.ts';
 import { applyRouteCategory } from './merge/routeCategory.ts';
-import { warnMsg, info } from '../lib/log-severity.ts';
+import { reconcileRoutes, routesToTxt } from './merge/routes.ts';
+import { reconcileShapes, shapesToTxt } from './merge/shapes.ts';
+import { reconcileStops, stopsToTxt } from './merge/stops.ts';
 
 /**
  * @param {{
@@ -94,20 +94,16 @@ export async function reconcile({ seed, tranzy, csv, options = {} }) {
   // publish CSVs for). Emits trip rows with empty times + timepoint=0
   // so consumers see "this route exists with these trips" instead of
   // "no service". See `src/assemble/emit/tranzy-fallback.js` for rationale.
-  const { tripRows: fallbackTripRows, stopTimeRows: fallbackStopTimeRows } =
-    reconcileTranzyFallback({
-      tranzy,
-      routesByRouteId,
-      byRouteService: csv.byRouteService,
-      stopsByStopId,
-      warnings,
-    });
+  const { tripRows: fallbackTripRows, stopTimeRows: fallbackStopTimeRows } = reconcileTranzyFallback({
+    tranzy,
+    routesByRouteId,
+    byRouteService: csv.byRouteService,
+    stopsByStopId,
+    warnings,
+  });
 
   // Calendar: derive from service_ids we actually generated trips for.
-  const serviceIds = new Set([
-    ...tripRows.map((t) => t.service_id),
-    ...fallbackTripRows.map((t) => t.service_id),
-  ]);
+  const serviceIds = new Set([...tripRows.map((t) => t.service_id), ...fallbackTripRows.map((t) => t.service_id)]);
   const { rows: calendarRows, unknownServiceIds } = reconcileCalendar({
     serviceIds,
     daysAhead: options.calendarDays ?? 180,
@@ -145,10 +141,12 @@ export async function reconcile({ seed, tranzy, csv, options = {} }) {
     const phantomDetails = phantomRoutes
       .map((r) => `${r.route_short_name || '(unnamed)'} (route_id=${r.route_id})`)
       .join(', ');
-    warnings.push(warnMsg(
-      `routes: ${phantomRoutes.length} phantom route(s) dropped ` +
-      `(in Tranzy /routes but no trips anywhere) — ${phantomDetails}`,
-    ));
+    warnings.push(
+      warnMsg(
+        `routes: ${phantomRoutes.length} phantom route(s) dropped ` +
+          `(in Tranzy /routes but no trips anywhere) — ${phantomDetails}`,
+      ),
+    );
   }
   // Rebuild the in-memory routes array excluding phantoms. Mutating in
   // place keeps downstream `routesToTxt(routes)` and `stats.routes`
@@ -216,7 +214,9 @@ export async function reconcile({ seed, tranzy, csv, options = {} }) {
   const routeTagsTxt = buildRouteTags(routeTags);
   const routeTagsSummary = formatRouteTagsSummary(routeTags);
   if (routeTagsSummary) {
-    warnings.push(info(`_route_tags: ${routeTagsSummary} -- see _route_tags.txt + route_networks.txt (1:1 priority-pick)`));
+    warnings.push(
+      info(`_route_tags: ${routeTagsSummary} -- see _route_tags.txt + route_networks.txt (1:1 priority-pick)`),
+    );
   }
 
   // All `*ToTxt` writers are async since they go through the spec's
@@ -293,7 +293,8 @@ function ensureAgencyTimezone(seedAgencyTxt, tz) {
   // PRIMARY KEY on agency_id would reject. The PR #84 hardening in
   // the orchestrator (CHECK + FK constraints, hard-fail INSERT) makes
   // this bug loud; before that, INSERT OR IGNORE silently dropped it.
-  const dataLines = lines.slice(1)
+  const dataLines = lines
+    .slice(1)
     .filter((line) => line.trim().length > 0)
     .map((line) => {
       const cols = line.split(',');
@@ -305,10 +306,13 @@ function ensureAgencyTimezone(seedAgencyTxt, tz) {
 }
 
 function feedInfoTxt({ buildDate, startDate, endDate }) {
-  const yyyymmdd = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const yyyymmdd = (d) =>
+    `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
   const version = yyyymmdd(buildDate);
-  return [
-    'feed_publisher_name,feed_publisher_url,feed_lang,feed_start_date,feed_end_date,feed_version',
-    `cluj-napoca-gtfs-adapter,https://github.com/n3ary/gtfs-adapters/tree/main/adapters/cluj-napoca,ro,${startDate ?? version},${endDate ?? version},${version}`,
-  ].join('\n') + '\n';
+  return (
+    [
+      'feed_publisher_name,feed_publisher_url,feed_lang,feed_start_date,feed_end_date,feed_version',
+      `cluj-napoca-gtfs-adapter,https://github.com/n3ary/gtfs-adapters/tree/main/adapters/cluj-napoca,ro,${startDate ?? version},${endDate ?? version},${version}`,
+    ].join('\n') + '\n'
+  );
 }

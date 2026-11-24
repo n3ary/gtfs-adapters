@@ -8,7 +8,7 @@
  * a "frequency anchor" trip in `trips.txt`.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { reconcile } from '../src/assemble/index.ts';
 import { parseCtpCsv } from '../src/sources/ctp-csv/index.ts';
@@ -56,14 +56,23 @@ describe('#15 — M26 frequency annotation fix', () => {
   });
 
   it('does NOT emit a frequency anchor for routes with no annotations', async () => {
-    const { files, warnings } = await reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
+    const { files, warnings } = await reconcile({
+      seed,
+      tranzy: null,
+      csv,
+      options: { buildDate: new Date('2026-06-29') },
+    });
     // 35 has no frequency annotations → no anchor
     expect(files['frequencies.txt']).not.toMatch(/^35_\d+_(LV|S|D|LD)_FREQ_/m);
   });
 
   it('logs the frequency anchor in build warnings', async () => {
     const { warnings } = await reconcile({ seed, tranzy: null, csv, options: { buildDate: new Date('2026-06-29') } });
-    expect(warnings.some((w) => w.message.includes('frequency anchor') && w.message.includes('M26') && w.message.includes('dir=0'))).toBe(true);
+    expect(
+      warnings.some(
+        (w) => w.message.includes('frequency anchor') && w.message.includes('M26') && w.message.includes('dir=0'),
+      ),
+    ).toBe(true);
   });
 });
 
@@ -81,14 +90,20 @@ describe('classifyCell (frequency annotation classification)', () => {
   it('classifies N-Mmin as headway range', async () => {
     const { classifyCell } = await import('../src/sources/ctp-csv/index.js');
     expect(classifyCell('10-20min')).toEqual({
-      type: 'headway', minSec: 600, maxSec: 1200, avgSec: 900,
+      type: 'headway',
+      minSec: 600,
+      maxSec: 1200,
+      avgSec: 900,
     });
   });
 
   it('classifies Nmin as single headway', async () => {
     const { classifyCell } = await import('../src/sources/ctp-csv/index.js');
     expect(classifyCell('5min')).toEqual({
-      type: 'headway', minSec: 300, maxSec: null, avgSec: 300,
+      type: 'headway',
+      minSec: 300,
+      maxSec: null,
+      avgSec: 300,
     });
   });
 

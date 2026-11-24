@@ -30,7 +30,7 @@
  */
 
 import type { ColumnSpec } from '@n3ary/gtfs-spec/sql';
-import { resolveRouteColors, computeNetworkColors } from './route-colors.ts';
+import { computeNetworkColors, resolveRouteColors } from './route-colors.ts';
 
 export type ColumnExtension = {
   table: string;
@@ -68,9 +68,7 @@ export type ComputedUpdates = {
  * Async is allowed (some adapters may fetch external material).
  * Returning an empty object is a valid no-op.
  */
-export type FillComputedColumnsHook = (
-  context: ExtensionContext,
-) => ComputedUpdates | Promise<ComputedUpdates>;
+export type FillComputedColumnsHook = (context: ExtensionContext) => ComputedUpdates | Promise<ComputedUpdates>;
 
 export interface StaticExtension {
   columnExtensions?: ReadonlyArray<ColumnExtension>;
@@ -131,9 +129,7 @@ export const producerExtensions: ReadonlyArray<{
    * parsed rows. The adapter reads this key in `staticExtension()`.
    */
   feedConfigKey: string;
-}> = [
-  { fileName: '_route_tags.txt', feedConfigKey: 'routeTags' },
-];
+}> = [{ fileName: '_route_tags.txt', feedConfigKey: 'routeTags' }];
 
 /**
  * Construct the StaticExtension object for this feed.
@@ -159,18 +155,14 @@ export const producerExtensions: ReadonlyArray<{
  */
 export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticExtension {
   return {
-    columnExtensions: [
-      { table: 'networks', column: ['network_color', 'TEXT'] },
-    ],
+    columnExtensions: [{ table: 'networks', column: ['network_color', 'TEXT'] }],
     tableExtensions: {
       _neary_config: {
         columns: [
           ['key', 'TEXT PRIMARY KEY'],
           ['value', 'TEXT NOT NULL'],
         ],
-        rows: feedConfig.timing
-          ? [{ key: 'timing', value: JSON.stringify(feedConfig.timing) }]
-          : [],
+        rows: feedConfig.timing ? [{ key: 'timing', value: JSON.stringify(feedConfig.timing) }] : [],
       },
       // `_route_tags` — full n:m route→tag mapping.
       //
@@ -228,20 +220,21 @@ export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticEx
         // extension values are stored verbatim from the adapter's
         // own emit, so the adapter is responsible for valid values
         // upstream).
-        rows: feedConfig.routeTags && feedConfig.routeTags.length > 0
-          ? feedConfig.routeTags.map((r) => {
-              const priorityRaw = r.priority?.trim() ?? '';
-              const priorityNum = priorityRaw === '' ? null : Number(priorityRaw);
-              return {
-                tag_id: r.tag_id ?? '',
-                route_id: r.route_id ?? '',
-                tag_label: r.tag_label && r.tag_label.length > 0 ? r.tag_label : null,
-                priority: priorityNum !== null && Number.isFinite(priorityNum) ? priorityNum : null,
-                icon: r.icon && r.icon.length > 0 ? r.icon : null,
-                color: r.color && r.color.length > 0 ? r.color : null,
-              };
-            })
-          : [],
+        rows:
+          feedConfig.routeTags && feedConfig.routeTags.length > 0
+            ? feedConfig.routeTags.map((r) => {
+                const priorityRaw = r.priority?.trim() ?? '';
+                const priorityNum = priorityRaw === '' ? null : Number(priorityRaw);
+                return {
+                  tag_id: r.tag_id ?? '',
+                  route_id: r.route_id ?? '',
+                  tag_label: r.tag_label && r.tag_label.length > 0 ? r.tag_label : null,
+                  priority: priorityNum !== null && Number.isFinite(priorityNum) ? priorityNum : null,
+                  icon: r.icon && r.icon.length > 0 ? r.icon : null,
+                  color: r.color && r.color.length > 0 ? r.color : null,
+                };
+              })
+            : [],
       },
     },
     fillComputedColumns: (ctx) => applyStaticPostLoad(ctx),
@@ -264,15 +257,11 @@ export function staticExtension(feedConfig: StaticExtensionFeedConfig): StaticEx
  * the spec SCHEMA, and issues one UPDATE per row in a single
  * transaction. ROLLBACK on throw.
  */
-export function applyStaticPostLoad(
-  ctx: ExtensionContext,
-): ComputedUpdates {
+export function applyStaticPostLoad(ctx: ExtensionContext): ComputedUpdates {
   // 1. Route color fixup -- mutate a transformed copy of ctx.routes
   //    with substituted + OKLCh-rotated values; we hand the fixed
   //    rows back to the pipeline as partial-route-color updates.
-  const allRouteFixup = resolveRouteColors(
-    ctx.routes as Parameters<typeof resolveRouteColors>[0],
-  );
+  const allRouteFixup = resolveRouteColors(ctx.routes as Parameters<typeof resolveRouteColors>[0]);
   const routeUpdates: Array<Record<string, unknown>> = [];
   for (const r of allRouteFixup.rows) {
     const id = (r as { route_id?: string }).route_id;

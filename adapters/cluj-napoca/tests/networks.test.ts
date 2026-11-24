@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { buildNetworks, formatNetworkUsageSummary } from '../src/assemble/emit/networks.ts';
 
@@ -34,16 +34,9 @@ describe('buildNetworks — networks.txt + route_networks.txt', () => {
       ['15', { id: 'normal', label: 'Normal' }],
     ]);
     const { networksTxt, routeNetworksTxt, networkUsage } = buildNetworks(routes, routeNetworks);
-    expect(networksTxt).toBe(
-      'network_id,network_name\nnormal,Normal\nschool,Transport Elevi\n',
-    );
+    expect(networksTxt).toBe('network_id,network_name\nnormal,Normal\nschool,Transport Elevi\n');
     // route_networks rows: sorted by network_id then route_id for diff-stability.
-    expect(routeNetworksTxt).toBe(
-      'network_id,route_id\n' +
-      'normal,15\n' +
-      'school,93\n' +
-      'school,94\n',
-    );
+    expect(routeNetworksTxt).toBe('network_id,route_id\n' + 'normal,15\n' + 'school,93\n' + 'school,94\n');
     expect(networkUsage.get('school')).toBe(2);
     expect(networkUsage.get('normal')).toBe(1);
   });
@@ -128,9 +121,7 @@ describe('buildNetworks — networks.txt + route_networks.txt', () => {
       ['93', { id: 'school', label: 'Transport Elevi' }],
     ]);
     const { networksTxt } = buildNetworks(routes, routeNetworks);
-    expect(networksTxt).toBe(
-      'network_id,network_name\nnormal,Normal\nschool,Transport Elevi\n',
-    );
+    expect(networksTxt).toBe('network_id,network_name\nnormal,Normal\nschool,Transport Elevi\n');
   });
 
   it('emits route_networks rows in (network_id, route_id) lex order for diff-stability', () => {
@@ -147,12 +138,7 @@ describe('buildNetworks — networks.txt + route_networks.txt', () => {
       ['r-c', { id: 'normal', label: 'Normal' }],
     ]);
     const { routeNetworksTxt } = buildNetworks(routes, routeNetworks);
-    expect(routeNetworksTxt).toBe(
-      'network_id,route_id\n' +
-      'normal,r-a\n' +
-      'normal,r-c\n' +
-      'school,r-b\n',
-    );
+    expect(routeNetworksTxt).toBe('network_id,route_id\n' + 'normal,r-a\n' + 'normal,r-c\n' + 'school,r-b\n');
   });
 
   it('emits one row per route, never 1:many (gtfs spec 1:1 by route_id)', () => {
@@ -165,9 +151,7 @@ describe('buildNetworks — networks.txt + route_networks.txt', () => {
       route_long_name: 'A - B',
       route_desc: '',
     }));
-    const routeNetworks = mapNetworks(
-      routes.map((r) => [r.route_id, { id: 'normal', label: 'Normal' }]),
-    );
+    const routeNetworks = mapNetworks(routes.map((r) => [r.route_id, { id: 'normal', label: 'Normal' }]));
     const { routeNetworksTxt } = buildNetworks(routes, routeNetworks);
     const dataLines = routeNetworksTxt.trim().split('\n').slice(1);
     expect(dataLines.length).toBe(100);

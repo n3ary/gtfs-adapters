@@ -1,5 +1,5 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
-import { type RouteRow } from '@n3ary/gtfs-spec/spec';
+import type { RouteRow } from '@n3ary/gtfs-spec/spec';
 /**
  * Route category classification + long_name cleanup.
  *
@@ -86,7 +86,7 @@ import { type RouteRow } from '@n3ary/gtfs-spec/spec';
  * to the route's tag. See neary#129 for the ingestion work.
  */
 
-import { terminalNamesMatch, normalizeStopName } from '../emit/trips.ts';
+import { normalizeStopName, terminalNamesMatch } from '../emit/trips.ts';
 
 /**
  * TAGS: route service-class taxonomy (1:many per route, drives
@@ -161,10 +161,7 @@ export const TAGS = [
     // (Romanian for "night"; Tranzy uses "Disp." prefix on headsigns
     // for depot-relative direction, but the long_name/desc sometimes
     // has "Noapte" explicitly).
-    match: (s, l, d) =>
-      /N$/.test(s) ||
-      /noapte/i.test(l) ||
-      /noapte/i.test(d),
+    match: (s, l, d) => /N$/.test(s) || /noapte/i.test(l) || /noapte/i.test(d),
   },
   {
     id: 'metroline',
@@ -181,10 +178,7 @@ export const TAGS = [
     label: 'Aeroport Expres',
     icon: 'plane',
     color: '0EA5E9',
-    match: (s, l, d) =>
-      /^A\d/.test(s) ||
-      /aeroport/i.test(l) ||
-      /aeroport/i.test(d),
+    match: (s, l, d) => /^A\d/.test(s) || /aeroport/i.test(l) || /aeroport/i.test(d),
   },
   {
     id: 'festival',
@@ -197,18 +191,14 @@ export const TAGS = [
     //   - "untold" substring in long_name or route_desc (Tranzy's
     //     parenthetical "(untold)" in long_name OR plain "Untold" in
     //     desc). Case-insensitive on both.
-    match: (s, l, d) =>
-      /U$/.test(s) ||
-      /untold/i.test(l) ||
-      /untold/i.test(d),
+    match: (s, l, d) => /U$/.test(s) || /untold/i.test(l) || /untold/i.test(d),
   },
   {
     id: 'special',
     label: 'Cursa Speciala',
     icon: 'zap',
     color: 'C2410C',
-    match: (s, l, d) =>
-      s === 'CS' || /CURSA SPECIALA/i.test(l) || /CURSA SPECIALA/i.test(d),
+    match: (s, l, d) => s === 'CS' || /CURSA SPECIALA/i.test(l) || /CURSA SPECIALA/i.test(d),
   },
 ];
 
@@ -282,11 +272,11 @@ export const NETWORKS = [
     // Elevi" tag in route_desc (school isn't a tag).
     match: (s, l, d) =>
       /^TE/i.test(s) ||
-      /^TE/i.test(l) ||  // M7x school-bus family: long_name="TE1F",
-                         // "TE1 Floresti", "TE2 Floresti" (Tranzy
-                         // keeps the school designation as long_name
-                         // even though short_name has the M* metroline
-                         // prefix).
+      /^TE/i.test(l) || // M7x school-bus family: long_name="TE1F",
+      // "TE1 Floresti", "TE2 Floresti" (Tranzy
+      // keeps the school designation as long_name
+      // even though short_name has the M* metroline
+      // prefix).
       /elevi/i.test(s) ||
       /elevi/i.test(l) ||
       /elevi/i.test(d),
@@ -326,8 +316,7 @@ export function classifyRoute(row) {
         // rebuilds one without the other. Surface the invariant
         // breach loudly so it doesn't ship as a silent priority=0.
         throw new Error(
-          `classifyRoute: TAG_INDEX missing entry for ${cat.id}; ` +
-          'TAGS and TAG_INDEX must stay in sync.',
+          `classifyRoute: TAG_INDEX missing entry for ${cat.id}; ` + 'TAGS and TAG_INDEX must stay in sync.',
         );
       }
       matches.push({ id: cat.id, label: cat.label, priority, icon: cat.icon, color: cat.color });
@@ -363,9 +352,7 @@ export function classifyNetwork(row) {
   const normal = NETWORKS.find((c) => c.id === 'normal');
   // `normal` is always in NETWORKS (declared first per the
   // convention). Defensive default if it ever gets removed.
-  return normal
-    ? { id: normal.id, label: normal.label }
-    : { id: 'normal', label: 'Normal' };
+  return normal ? { id: normal.id, label: normal.label } : { id: 'normal', label: 'Normal' };
 }
 
 /**
@@ -422,11 +409,13 @@ function cleanText(row, value, captureStripped = false) {
   // Strip trailing parentheticals. Greedy on the right edge so that
   // "Foo (a) (b)" strips both -> "Foo" and captures ["a", "b"].
   if (captureStripped) {
-    t = t.replace(/\s*\(([^)]*)\)\s*$/g, (_match, content) => {
-      const c = content.trim();
-      if (c) stripped.push(c);
-      return '';
-    }).trim();
+    t = t
+      .replace(/\s*\(([^)]*)\)\s*$/g, (_match, content) => {
+        const c = content.trim();
+        if (c) stripped.push(c);
+        return '';
+      })
+      .trim();
   } else {
     t = t.replace(/\s*\([^)]*\)\s*$/g, '').trim();
   }
@@ -569,7 +558,10 @@ export function deriveLongNameFromStops({ routeId, allStopTimeRows, tripToRoute,
  * @returns {string}
  */
 function titleCaseAnnotation(s) {
-  return s.split(/\s+/).map((w) => w ? w.charAt(0).toUpperCase() + w.slice(1) : w).join(' ');
+  return s
+    .split(/\s+/)
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(' ');
 }
 
 /**
@@ -582,9 +574,14 @@ function titleCaseAnnotation(s) {
  */
 function tokenOverlap(a, b) {
   const tokenize = (s) => {
-    const norm = (s || '').toString().toLowerCase()
-      .replace(/ă/g, 'a').replace(/â/g, 'a').replace(/î/g, 'i')
-      .replace(/ș/g, 's').replace(/ț/g, 't');
+    const norm = (s || '')
+      .toString()
+      .toLowerCase()
+      .replace(/ă/g, 'a')
+      .replace(/â/g, 'a')
+      .replace(/î/g, 'i')
+      .replace(/ș/g, 's')
+      .replace(/ț/g, 't');
     return new Set((norm.match(/[a-z0-9]+/g) ?? []).filter((t) => t.length >= 4));
   };
   const tokensA = tokenize(a);
@@ -941,8 +938,8 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
         tripToRoute,
         stopsByStopId,
       });
-      const descHasUniqueInfo = cleanedDesc && cleanedDesc !== cleanedLong
-        && !isStaleLongNameVariant(cleanedDesc, cleanedLong, routeStopNames);
+      const descHasUniqueInfo =
+        cleanedDesc && cleanedDesc !== cleanedLong && !isStaleLongNameVariant(cleanedDesc, cleanedLong, routeStopNames);
 
       if (descHasUniqueInfo) {
         // cleaned desc has info not in long_name.
@@ -988,8 +985,7 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
           const longFirst = longParts[0];
           const longLast = longParts[1];
           const descFirstMatches = tokenOverlap(descFirst, longFirst);
-          const descSecondExactMatches = normalizeStopName(descSecond)
-            === normalizeStopName(longLast);
+          const descSecondExactMatches = normalizeStopName(descSecond) === normalizeStopName(longLast);
           if (descFirstMatches && !descSecondExactMatches) {
             // Same-line desc, but destination differs from long_name.
             // Verify the terminal is on the route pattern (otherwise
@@ -1040,32 +1036,32 @@ export function applyRouteCategory({ routes, allStopTimeRows = [], tripToRoute, 
     }
   }
 
-// Build-log INFO summary. Per-row detail is in routes.txt + networks.txt;
-    // this is the one-liner for the human reading the build log.
-    if (
-      classifiedCount > 0 ||
-      longNameCleanedCount > 0 ||
-      longNameDerivedCount > 0 ||
-      longNameUnresolvedCount > 0 ||
-      descCleanedCount > 0 ||
-      descFromCleanedCount > 0 ||
-      descFromStrippedCount > 0
-    ) {
-      warnings.push({
-        severity: 'info',
-        message:
-          `routes: tagged ${classifiedCount} route(s) (${multiTagCount} with multiple tags), ` +
-          `networked ${networkSchoolCount} school + ${networkNormalCount} normal, ` +
-          `cleaned ${longNameCleanedCount} long_name + ${descCleanedCount} desc, ` +
-          `derived ${longNameDerivedCount} long_name(s) (desc or stops fallback)` +
-          (longNameUnresolvedCount > 0 ? `, ${longNameUnresolvedCount} unresolved` : '') +
-          `, surfaced ${descFromCleanedCount} cleaned desc + ${descFromStrippedCount} parenthetical(s) (both tagged + un-tagged)` +
-          (preservedButSuspiciousCount > 0
-            ? `, ${preservedButSuspiciousCount} preserved-but-suspicious desc(s) -- operator review recommended`
-            : '') +
-          ' -- see networks.txt + route_networks.txt',
-      });
-    }
+  // Build-log INFO summary. Per-row detail is in routes.txt + networks.txt;
+  // this is the one-liner for the human reading the build log.
+  if (
+    classifiedCount > 0 ||
+    longNameCleanedCount > 0 ||
+    longNameDerivedCount > 0 ||
+    longNameUnresolvedCount > 0 ||
+    descCleanedCount > 0 ||
+    descFromCleanedCount > 0 ||
+    descFromStrippedCount > 0
+  ) {
+    warnings.push({
+      severity: 'info',
+      message:
+        `routes: tagged ${classifiedCount} route(s) (${multiTagCount} with multiple tags), ` +
+        `networked ${networkSchoolCount} school + ${networkNormalCount} normal, ` +
+        `cleaned ${longNameCleanedCount} long_name + ${descCleanedCount} desc, ` +
+        `derived ${longNameDerivedCount} long_name(s) (desc or stops fallback)` +
+        (longNameUnresolvedCount > 0 ? `, ${longNameUnresolvedCount} unresolved` : '') +
+        `, surfaced ${descFromCleanedCount} cleaned desc + ${descFromStrippedCount} parenthetical(s) (both tagged + un-tagged)` +
+        (preservedButSuspiciousCount > 0
+          ? `, ${preservedButSuspiciousCount} preserved-but-suspicious desc(s) -- operator review recommended`
+          : '') +
+        ' -- see networks.txt + route_networks.txt',
+    });
+  }
 
   return {
     classifiedCount,

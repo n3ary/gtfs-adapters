@@ -2,10 +2,10 @@
 // Tests for the programmatic ingestBuild entry added with the
 // single-publisher R2 architecture (gtfs-adapters#@).
 
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Module-level state shared between the vi.mock factory below and
 // the per-test override for the WAF fail-fast case. vi.hoisted runs
@@ -93,8 +93,8 @@ vi.mock('../../src/sources/ctp-csv/index.ts', async (importOriginal) => {
       }
       return { byRouteService, warnings: [] };
     },
-    readCtpCsvFromDisk: () => '',  // unused under mocked fetchAllCsvSchedules
-    fetchCtpCsv: async () => '',  // unused under mocked fetchAllCsvSchedules
+    readCtpCsvFromDisk: () => '', // unused under mocked fetchAllCsvSchedules
+    fetchCtpCsv: async () => '', // unused under mocked fetchAllCsvSchedules
     parseCtpCsv: mod.parseCtpCsv,
   };
 });
@@ -171,9 +171,9 @@ describe('ingestBuild', () => {
     // loudly instead of publishing degraded data.
     ctpMockState.throwOnNext = new Error(
       'CTP CSV scrape aborted: 6 of 6 (100%) fetch(es) returned a non-CSV body ' +
-      '(WAF / captcha / maintenance page). Scraped 0 routes successfully before aborting. ' +
-      'Re-run the daily cron when CTP responds cleanly - do NOT loosen the WAF ' +
-      'detection (CTP\'s WAF rotates fingerprints; the right fix is upstream).',
+        '(WAF / captcha / maintenance page). Scraped 0 routes successfully before aborting. ' +
+        'Re-run the daily cron when CTP responds cleanly - do NOT loosen the WAF ' +
+        "detection (CTP's WAF rotates fingerprints; the right fix is upstream).",
     );
 
     await expect(

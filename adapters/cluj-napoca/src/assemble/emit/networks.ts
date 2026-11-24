@@ -1,6 +1,6 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 
-import { type RouteRow, networksToTxt, routeNetworksToTxt } from '@n3ary/gtfs-spec/spec';
+import { networksToTxt, type RouteRow, routeNetworksToTxt } from '@n3ary/gtfs-spec/spec';
 
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 /**
@@ -107,9 +107,7 @@ export function buildNetworks(routes, routeNetworks) {
   // diff-stability. In practice every populated feed has at least
   // one `normal` route, so `normal` is virtually always present;
   // `school` is conditional on having at least one TE* route.
-  const networkRows = allNetworks
-    .filter((n) => networkUsage.has(n.id))
-    .map((n) => [n.id, n.label] as [string, string]);
+  const networkRows = allNetworks.filter((n) => networkUsage.has(n.id)).map((n) => [n.id, n.label] as [string, string]);
 
   const networksTxt = networksToTxt(networkRows);
   const routeNetworksTxt = routeNetworksToTxt(routeNetworkRows);

@@ -57,9 +57,8 @@ export function cumulativeShapeDistances(stops, polyline, maxPerpDistM = 200) {
   }
   for (let i = 0; i < n; i++) {
     const { distAlongM, perpDistM } = projectOnPolyline(stops[i], polyline);
-    const fallback = i === 0
-      ? 0
-      : out[i - 1] + haversineMeters(stops[i - 1].lat, stops[i - 1].lon, stops[i].lat, stops[i].lon);
+    const fallback =
+      i === 0 ? 0 : out[i - 1] + haversineMeters(stops[i - 1].lat, stops[i - 1].lon, stops[i].lat, stops[i].lon);
     let chosen = perpDistM > maxPerpDistM ? fallback : distAlongM;
     if (i > 0 && chosen <= out[i - 1]) chosen = out[i - 1] + 1;
     out[i] = chosen;

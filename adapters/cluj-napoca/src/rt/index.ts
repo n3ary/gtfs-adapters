@@ -17,12 +17,13 @@
  * (`feeds/<id>/config.json`) or by the MDB catalog lookup -- not
  * by the adapter.
  */
-import { clujQuirk, parseClujTripId } from './cluj.ts';
+
 import type { ClujQuirk } from './cluj.ts';
+import { clujQuirk, parseClujTripId } from './cluj.ts';
 import { extraVehiclePositions } from './extras.ts';
 
-export { clujQuirk, parseClujTripId, extraVehiclePositions };
 export type { ClujQuirk };
+export { clujQuirk, extraVehiclePositions, parseClujTripId };
 
 /**
  * Adapter hook for the generic proxy. Returns the quirk for our

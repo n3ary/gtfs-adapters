@@ -16,7 +16,8 @@
  *   - No external HTTP deps.
  */
 
-const USER_AGENT = 'cluj-napoca-gtfs-adapter/0.3.3 (+https://github.com/n3ary/gtfs-adapters/tree/main/adapters/cluj-napoca)';
+const USER_AGENT =
+  'cluj-napoca-gtfs-adapter/0.3.3 (+https://github.com/n3ary/gtfs-adapters/tree/main/adapters/cluj-napoca)';
 
 export class TranzyError extends Error {
   endpoint: string | undefined;
@@ -158,10 +159,10 @@ export class TranzyClient {
           await new Promise((r) => setTimeout(r, backoff));
           continue;
         }
-        throw new TranzyRateLimitError(
-          `Tranzy rate-limit hit on ${endpoint} after ${attempts} attempts`,
-          { endpoint, status: res.status },
-        );
+        throw new TranzyRateLimitError(`Tranzy rate-limit hit on ${endpoint} after ${attempts} attempts`, {
+          endpoint,
+          status: res.status,
+        });
       }
 
       if (res.status >= 500 && res.status < 600) {
@@ -172,10 +173,11 @@ export class TranzyClient {
           continue;
         }
         const body = await safeBody(res);
-        throw new TranzyError(
-          `Tranzy ${endpoint} returned ${res.status}: ${body.slice(0, 300)}`,
-          { endpoint, status: res.status, body },
-        );
+        throw new TranzyError(`Tranzy ${endpoint} returned ${res.status}: ${body.slice(0, 300)}`, {
+          endpoint,
+          status: res.status,
+          body,
+        });
       }
 
       if (res.status === 404) {
@@ -191,36 +193,51 @@ export class TranzyClient {
 
       if (!res.ok) {
         const body = await safeBody(res);
-        throw new TranzyError(
-          `Tranzy ${endpoint} returned ${res.status}: ${body.slice(0, 300)}`,
-          { endpoint, status: res.status, body },
-        );
+        throw new TranzyError(`Tranzy ${endpoint} returned ${res.status}: ${body.slice(0, 300)}`, {
+          endpoint,
+          status: res.status,
+          body,
+        });
       }
 
       try {
         return await res.json();
       } catch (err) {
         const body = await safeBody(res);
-        throw new TranzyError(
-          `Tranzy ${endpoint} returned non-JSON body: ${body.slice(0, 300)}`,
-          { endpoint, status: res.status, body },
-        );
+        throw new TranzyError(`Tranzy ${endpoint} returned non-JSON body: ${body.slice(0, 300)}`, {
+          endpoint,
+          status: res.status,
+          body,
+        });
       }
     }
 
-    throw new TranzyError(
-      `Tranzy ${endpoint} failed: ${lastErr ? (lastErr as Error).message : 'unknown'}`,
-      { endpoint },
-    );
+    throw new TranzyError(`Tranzy ${endpoint} failed: ${lastErr ? (lastErr as Error).message : 'unknown'}`, {
+      endpoint,
+    });
   }
 
-  getRoutes(): Promise<unknown[]> { return this._request('/routes') as Promise<unknown[]>; }
-  getStops(): Promise<unknown[]> { return this._request('/stops') as Promise<unknown[]>; }
-  getTrips(): Promise<unknown[]> { return this._request('/trips') as Promise<unknown[]>; }
-  getShapes(): Promise<unknown[]> { return this._request('/shapes') as Promise<unknown[]>; }
-  getStopTimes(): Promise<unknown[]> { return this._request('/stop_times') as Promise<unknown[]>; }
-  getCalendar(): Promise<unknown[]> { return this._request('/calendar') as Promise<unknown[]>; }
-  getAgencies(): Promise<unknown[]> { return this._request('/agencies') as Promise<unknown[]>; }
+  getRoutes(): Promise<unknown[]> {
+    return this._request('/routes') as Promise<unknown[]>;
+  }
+  getStops(): Promise<unknown[]> {
+    return this._request('/stops') as Promise<unknown[]>;
+  }
+  getTrips(): Promise<unknown[]> {
+    return this._request('/trips') as Promise<unknown[]>;
+  }
+  getShapes(): Promise<unknown[]> {
+    return this._request('/shapes') as Promise<unknown[]>;
+  }
+  getStopTimes(): Promise<unknown[]> {
+    return this._request('/stop_times') as Promise<unknown[]>;
+  }
+  getCalendar(): Promise<unknown[]> {
+    return this._request('/calendar') as Promise<unknown[]>;
+  }
+  getAgencies(): Promise<unknown[]> {
+    return this._request('/agencies') as Promise<unknown[]>;
+  }
   getVehicles(routeId?: string): Promise<unknown[]> {
     const params = routeId !== undefined && routeId !== null ? { route_id: routeId } : undefined;
     return this._request('/vehicles', params) as Promise<unknown[]>;
@@ -237,7 +254,8 @@ export class TranzyClient {
    *   isn't in the GTFS spec. Callers that need typed rows should
    *   narrow against the @n3ary/gtfs-spec schema.
    */
-  async fetchAll(): Promise<FetchAllResult> { // eslint-disable-line @typescript-eslint/no-duplicate-type-constituents
+  async fetchAll(): Promise<FetchAllResult> {
+    // eslint-disable-line @typescript-eslint/no-duplicate-type-constituents
     console.log(`[tranzy] fetching all endpoints from ${this.baseUrl} (agency=${this.agencyId})`);
     const endpoints: Array<[keyof FetchAllResult, () => Promise<unknown[]>]> = [
       ['routes', () => this.getRoutes()],
@@ -265,10 +283,10 @@ export class TranzyClient {
     }
     console.log(
       `[tranzy] fetched ${result.routes.length} routes, ` +
-      `${result.stops.length} stops, ` +
-      `${result.trips.length} trips, ` +
-      `${result.shapes.length} shapes, ` +
-      `${result.stop_times.length} stop_times`,
+        `${result.stops.length} stops, ` +
+        `${result.trips.length} trips, ` +
+        `${result.shapes.length} shapes, ` +
+        `${result.stop_times.length} stop_times`,
     );
     return result;
   }
@@ -284,5 +302,9 @@ type FetchAllResult = {
 };
 
 async function safeBody(res: Response) {
-  try { return await res.text(); } catch { return '<unreadable>'; }
+  try {
+    return await res.text();
+  } catch {
+    return '<unreadable>';
+  }
 }

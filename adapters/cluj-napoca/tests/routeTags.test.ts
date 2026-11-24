@@ -1,5 +1,5 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity.
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { buildRouteTags, formatRouteTagsSummary } from '../src/assemble/emit/routeTags.ts';
 
@@ -27,7 +27,9 @@ describe('buildRouteTags — _route_tags producer extension', () => {
 
   it('emits the CSV header + one row per (tag_id, route_id) for 1:1 routes', () => {
     const routeTags = new Map();
-    routeTags.set('93', [{ id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap', color: '8B5CF6' }]);
+    routeTags.set('93', [
+      { id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap', color: '8B5CF6' },
+    ]);
     routeTags.set('15', [{ id: 'night', label: 'Noapte', priority: 3, icon: 'moon', color: '1A1F36' }]);
     const csv = buildRouteTags(routeTags);
     const lines = csv.trim().split('\n');
@@ -66,7 +68,9 @@ describe('buildRouteTags — _route_tags producer extension', () => {
     // spurious CSV diffs. The sort is part of the contract.
     const routeTags = new Map();
     routeTags.set('Z', [{ id: 'metroline', label: 'Metropolitan', priority: 5, icon: 'map-pin', color: '2E7D5B' }]);
-    routeTags.set('A', [{ id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap', color: '8B5CF6' }]);
+    routeTags.set('A', [
+      { id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap', color: '8B5CF6' },
+    ]);
     routeTags.set('M', [
       { id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap', color: '8B5CF6' },
       { id: 'metroline', label: 'Metropolitan', priority: 5, icon: 'map-pin', color: '2E7D5B' },
@@ -97,7 +101,9 @@ describe('buildRouteTags — _route_tags producer extension', () => {
     // rendering) parse by column name, but the order matters for
     // human readers + downstream SQLite imports. Pin it.
     const routeTags = new Map();
-    routeTags.set('R', [{ id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap', color: '8B5CF6' }]);
+    routeTags.set('R', [
+      { id: 'school', label: 'Transport Elevi', priority: 1, icon: 'graduation-cap', color: '8B5CF6' },
+    ]);
     const csv = buildRouteTags(routeTags);
     expect(csv).toMatch(/^tag_id,route_id,tag_label,priority,icon,color\n/);
   });

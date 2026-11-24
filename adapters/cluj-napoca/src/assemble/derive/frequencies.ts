@@ -1,6 +1,6 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 
-import { type StopTimeRow, type ShapeRow, FrequenciesRowSchema, serializeRows } from '@n3ary/gtfs-spec/spec';
+import { FrequenciesRowSchema, type ShapeRow, type StopTimeRow, serializeRows } from '@n3ary/gtfs-spec/spec';
 
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 /**
@@ -26,8 +26,8 @@ import { type StopTimeRow, type ShapeRow, FrequenciesRowSchema, serializeRows } 
  * warning.
  */
 
-import { computeStopTimes } from '../../lib/timing.ts';
 import { info, warnMsg } from '../../lib/log-severity.ts';
+import { computeStopTimes } from '../../lib/timing.ts';
 import { canonicalShortName } from '../../sources/ctp-csv/shortname-aliases.ts';
 
 const DEFAULT_WINDOW = { start: '05:00', end: '23:00' };
@@ -95,7 +95,9 @@ export function reconcileFrequencies(input) {
         const key = `${routeId}|${dir}`;
         const pattern = input.seedPatterns.get(key) ?? input.tranzyPatterns.get(key);
         if (!pattern || pattern.stops.length === 0) {
-          input.warnings.push(warnMsg(`frequency anchor skipped: ${routeShortName} dir=${dir} ${serviceId} — no pattern`));
+          input.warnings.push(
+            warnMsg(`frequency anchor skipped: ${routeShortName} dir=${dir} ${serviceId} — no pattern`),
+          );
           continue;
         }
 
@@ -117,10 +119,11 @@ export function reconcileFrequencies(input) {
           continue;
         }
         const shape = (pattern.shapeId && input.shapesById.get(pattern.shapeId)) || [];
-        const headsign = pattern.headsign
-          || (dir === 0 ? csv.outStopName : csv.inStopName)
-          || routeRow.route_long_name
-          || routeShortName;
+        const headsign =
+          pattern.headsign ||
+          (dir === 0 ? csv.outStopName : csv.inStopName) ||
+          routeRow.route_long_name ||
+          routeShortName;
 
         const anchorTripId = `${routeId}_${dir}_${serviceId}_FREQ_${window.start.replace(':', '')}`;
         const shapeId = pattern.shapeId || `${routeId}_${dir}`;
@@ -135,7 +138,11 @@ export function reconcileFrequencies(input) {
 
         // 5. Anchor stop_times at start of window.
         const startSec = window.startSec;
-        const { arrivals, departures: stopDeps, shapeDistTraveledM } = computeStopTimes({
+        const {
+          arrivals,
+          departures: stopDeps,
+          shapeDistTraveledM,
+        } = computeStopTimes({
           startSec,
           stops: orderedStops,
           shape,
@@ -162,9 +169,11 @@ export function reconcileFrequencies(input) {
           exact_times: '0',
         });
 
-        input.warnings.push(info(
-          `frequency anchor: ${routeShortName} dir=${dir} ${serviceId} ${window.start}-${window.end} every ${(headway.avgSec / 60).toFixed(0)}min (avg)`,
-        ));
+        input.warnings.push(
+          info(
+            `frequency anchor: ${routeShortName} dir=${dir} ${serviceId} ${window.start}-${window.end} every ${(headway.avgSec / 60).toFixed(0)}min (avg)`,
+          ),
+        );
       }
     }
   }
@@ -174,7 +183,11 @@ export function reconcileFrequencies(input) {
 
 function deriveWindow(ranges, routeShortName, dir, serviceId, warnings) {
   if (ranges.length === 0) {
-    warnings.push(info(`frequency anchor ${routeShortName} dir=${dir} ${serviceId}: no range, using default ${DEFAULT_WINDOW.start}-${DEFAULT_WINDOW.end}`));
+    warnings.push(
+      info(
+        `frequency anchor ${routeShortName} dir=${dir} ${serviceId}: no range, using default ${DEFAULT_WINDOW.start}-${DEFAULT_WINDOW.end}`,
+      ),
+    );
     return {
       start: DEFAULT_WINDOW.start,
       end: DEFAULT_WINDOW.end,
@@ -200,7 +213,11 @@ function deriveWindow(ranges, routeShortName, dir, serviceId, warnings) {
 
 function deriveHeadway(headways, routeShortName, dir, serviceId, warnings) {
   if (headways.length === 0) {
-    warnings.push(info(`frequency anchor ${routeShortName} dir=${dir} ${serviceId}: no headway, using default ${DEFAULT_HEADWAY_SEC}s`));
+    warnings.push(
+      info(
+        `frequency anchor ${routeShortName} dir=${dir} ${serviceId}: no headway, using default ${DEFAULT_HEADWAY_SEC}s`,
+      ),
+    );
     return { minSec: DEFAULT_HEADWAY_SEC, maxSec: DEFAULT_HEADWAY_SEC, avgSec: DEFAULT_HEADWAY_SEC };
   }
   let minSec = Infinity;

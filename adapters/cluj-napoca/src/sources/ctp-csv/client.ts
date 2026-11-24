@@ -17,13 +17,13 @@
  * here is now the only entry point the adapter uses.
  */
 
-import { USER_AGENT } from '../../lib/seed.ts';
 import { warnMsg } from '../../lib/log-severity.ts';
-import { TRANZY_TO_CTP_SHORTNAME, canonicalShortName } from './shortname-aliases.ts';
+import { USER_AGENT } from '../../lib/seed.ts';
 import { parseCtpCsv } from './parser.ts';
+import { canonicalShortName, TRANZY_TO_CTP_SHORTNAME } from './shortname-aliases.ts';
 
-export { parseCtpCsv, classifyCell } from './parser.ts';
-export { TRANZY_TO_CTP_SHORTNAME, canonicalShortName } from './shortname-aliases.ts';
+export { classifyCell, parseCtpCsv } from './parser.ts';
+export { canonicalShortName, TRANZY_TO_CTP_SHORTNAME } from './shortname-aliases.ts';
 
 const DEFAULT_BASE_URL = 'https://ctpcj.ro/orare/csv/orar_{routeShortName}_{serviceId}.csv';
 
@@ -82,9 +82,9 @@ export function buildCtpCsvUrl(routeShortName, serviceKey, baseUrl = DEFAULT_BAS
 // (Verified 2026-06-29.)
 const WAF_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   'Accept-Language': 'ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7',
-  'Referer': 'https://ctpcj.ro/index.php/ro/orare-linii/linii-urbane',
+  Referer: 'https://ctpcj.ro/index.php/ro/orare-linii/linii-urbane',
   'Sec-Fetch-Dest': 'document',
   'Sec-Fetch-Mode': 'navigate',
   'Sec-Fetch-Site': 'same-origin',
@@ -164,7 +164,9 @@ function wafWarnDedup(shortName, svcKey, body) {
   }
   _wafSeen.add(sig);
   if (_wafLogged < 3) {
-    console.warn(`[ctp-csv] ${shortName}_${svcKey}: not CSV (got ${body.length}B starting "${body.slice(0, 40).replace(/\s+/g, ' ')}…")`);
+    console.warn(
+      `[ctp-csv] ${shortName}_${svcKey}: not CSV (got ${body.length}B starting "${body.slice(0, 40).replace(/\s+/g, ' ')}…")`,
+    );
     _wafLogged++;
     if (_wafLogged === 3 && _wafTotal > 3) {
       console.warn(`[ctp-csv] (further WAF/non-CSV responses suppressed - full breakdown in smoke summary)`);
@@ -253,15 +255,12 @@ export async function fetchAllCsvSchedules(routes, opts = {}) {
 
   // Bounded-concurrency runner.
   const queue = tasks.slice();
-  const workers = Array.from(
-    { length: Math.min(concurrency, queue.length) },
-    async () => {
-      while (queue.length > 0) {
-        const task = queue.shift();
-        if (task) await task();
-      }
-    },
-  );
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    while (queue.length > 0) {
+      const task = queue.shift();
+      if (task) await task();
+    }
+  });
   await Promise.all(workers);
 
   // WAF fail-fast: aggregate non-CSV responses across this call. Any
@@ -275,11 +274,11 @@ export async function fetchAllCsvSchedules(routes, opts = {}) {
   if (_wafTotal > 0) {
     throw new Error(
       `CTP CSV scrape aborted: ${_wafTotal} of ${totalAttempts} ` +
-      `(${Math.round((_wafTotal / Math.max(1, totalAttempts)) * 100)}%) ` +
-      `fetch(es) returned a non-CSV body (WAF / captcha / maintenance page). ` +
-      `Scraped ${byRouteService.size} routes successfully before aborting. ` +
-      `Re-run the daily cron when CTP responds cleanly - do NOT loosen the WAF ` +
-      `detection (CTP's WAF rotates fingerprints; the right fix is upstream).`,
+        `(${Math.round((_wafTotal / Math.max(1, totalAttempts)) * 100)}%) ` +
+        `fetch(es) returned a non-CSV body (WAF / captcha / maintenance page). ` +
+        `Scraped ${byRouteService.size} routes successfully before aborting. ` +
+        `Re-run the daily cron when CTP responds cleanly - do NOT loosen the WAF ` +
+        `detection (CTP's WAF rotates fingerprints; the right fix is upstream).`,
     );
   }
 

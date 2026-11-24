@@ -1,12 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
-  normalizeColor,
   computeTypeTopColors,
-  resolveRouteColor,
-  rotateHueOklch,
+  normalizeColor,
   oklabDistance,
+  resolveRouteColor,
   resolveRouteColors,
+  rotateHueOklch,
 } from '../../src/static/route-colors.ts';
 
 describe('normalizeColor', () => {

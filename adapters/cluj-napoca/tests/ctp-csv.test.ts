@@ -1,7 +1,7 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity.
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { parseCtpCsv, fetchCtpCsv, fetchAllCsvSchedules } from '../src/sources/ctp-csv/index.ts';
+import { fetchAllCsvSchedules, fetchCtpCsv, parseCtpCsv } from '../src/sources/ctp-csv/index.ts';
 import { fixtures } from './fixtures/index.ts';
 
 describe('parseCtpCsv', () => {
@@ -17,17 +17,13 @@ describe('parseCtpCsv', () => {
 
   it('classifies range + headway cells into frequencyAnnotations (M26)', () => {
     const result = parseCtpCsv(fixtures.csv.M26.LV);
-// @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
+    // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
     // dir0 column: range "05:05-22:40", headway "10-20min", time "05:41"
     // dir1 column: three individual times
     expect(result.departures.dir0).toEqual(['05:41']);
     expect(result.departures.dir1).toEqual(['05:23', '05:32', '05:50']);
-    expect(result.frequencyAnnotations.dir0.ranges).toEqual([
-      { start: '05:05', end: '22:40' },
-    ]);
-    expect(result.frequencyAnnotations.dir0.headways).toEqual([
-      { minSec: 600, maxSec: 1200, avgSec: 900 },
-    ]);
+    expect(result.frequencyAnnotations.dir0.ranges).toEqual([{ start: '05:05', end: '22:40' }]);
+    expect(result.frequencyAnnotations.dir0.headways).toEqual([{ minSec: 600, maxSec: 1200, avgSec: 900 }]);
     // dir1 had no frequency annotations.
     expect(result.frequencyAnnotations.dir1.ranges).toEqual([]);
     expect(result.frequencyAnnotations.dir1.headways).toEqual([]);
@@ -97,15 +93,12 @@ describe('fetchAllCsvSchedules', () => {
       inflight--;
       return new Response(fixtures.csv['35'].LV, { status: 200 });
     };
-    const { byRouteService, warnings } = await fetchAllCsvSchedules(
-      [{ shortName: '35' }, { shortName: 'M26' }],
-      {
-        serviceKeys: ['lv', 's', 'd'],
-        serviceIdMap: { lv: 'LV', s: 'S', d: 'D' },
-        concurrency: 2,
-        fetch,
-      },
-    );
+    const { byRouteService, warnings } = await fetchAllCsvSchedules([{ shortName: '35' }, { shortName: 'M26' }], {
+      serviceKeys: ['lv', 's', 'd'],
+      serviceIdMap: { lv: 'LV', s: 'S', d: 'D' },
+      concurrency: 2,
+      fetch,
+    });
     expect(peak).toBeLessThanOrEqual(2);
     expect(byRouteService.has('35')).toBe(true);
     // Only 35 fixtures are returned; M26 hits the CSV '35' by accident, but
@@ -121,19 +114,16 @@ describe('fetchAllCsvSchedules', () => {
     // cluj-napoca feed with 6% of its trips (951/15053) and surfaced
     // as "no stops near me" in the consumer app.
     const fetch = async () =>
-      new Response(
-        '<!DOCTYPE html><html lang="en"><head>captcha</head><body>verify</body></html>',
-        { status: 200, headers: { 'Content-Type': 'text/html' } },
-      );
+      new Response('<!DOCTYPE html><html lang="en"><head>captcha</head><body>verify</body></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      });
     await expect(
-      fetchAllCsvSchedules(
-        [{ shortName: '35' }, { shortName: 'M26' }],
-        {
-          serviceKeys: ['lv', 's'],
-          serviceIdMap: { lv: 'LV', s: 'S' },
-          fetch,
-        },
-      ),
+      fetchAllCsvSchedules([{ shortName: '35' }, { shortName: 'M26' }], {
+        serviceKeys: ['lv', 's'],
+        serviceIdMap: { lv: 'LV', s: 'S' },
+        fetch,
+      }),
     ).rejects.toThrow(/CTP CSV scrape aborted.*WAF.*captcha.*maintenance/);
   });
 
@@ -155,14 +145,11 @@ describe('fetchAllCsvSchedules', () => {
       return new Response(fixtures.csv['35'].LV, { status: 200 });
     };
     await expect(
-      fetchAllCsvSchedules(
-        [{ shortName: '35' }],
-        {
-          serviceKeys: ['lv', 's'],
-          serviceIdMap: { lv: 'LV', s: 'S' },
-          fetch,
-        },
-      ),
+      fetchAllCsvSchedules([{ shortName: '35' }], {
+        serviceKeys: ['lv', 's'],
+        serviceIdMap: { lv: 'LV', s: 'S' },
+        fetch,
+      }),
     ).rejects.toThrow(/CTP CSV scrape aborted/);
   });
 });
