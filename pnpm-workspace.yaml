@@ -6,7 +6,10 @@ packages:
 # and the path the package enters the tree by. Drop an override once
 # the package that pulls it in raises its own floor.
 #   #1, #4 protobufjs   CVE-2026-59877 (DoS via infinite loop in
-#                       .proto option parsing) - 7.6.4 -> 7.6.5
+#                       .proto option parsing) - 7.6.4 -> 7.6.5 on the
+#                       7.x line; the 8.x line is patched from 8.6.6
+#                       (the 8.x vulnerable range is >= 8.0.0, <= 8.6.5),
+#                       so the override tracks the 8.x line at 8.8.1
 #   #2-7, #12, #18-21   brace-expansion DoS advisories (CVE-2026-13149
 #                       exponential-time expansion, CVE-2026-14257
 #                       unbounded expansion length, nested-group and
@@ -51,7 +54,7 @@ overrides:
   # line (via glob@8) is already outside the advisory range and is
   # left alone by the >=10 selector.
   minimatch@>=10: ^11.0.1
-  protobufjs: ^7.6.5
+  protobufjs: ^8.8.1
   postcss: ^8.5.23
   brace-expansion@<3: 2.1.7
   brace-expansion@>=3: 5.0.12
