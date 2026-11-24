@@ -46,6 +46,11 @@ packages:
 # See gtfs/pnpm-workspace.yaml for the single-line form
 # used in the upstream consumer.
 overrides:
+  # GHSA-g3hv-75wg-m249 (minimatch DoS via globparts amplification).
+  # 10.2.5 -> 11.0.1. The 10.x line comes in via readdir-glob; the 5.x
+  # line (via glob@8) is already outside the advisory range and is
+  # left alone by the >=10 selector.
+  minimatch@>=10: ^11.0.1
   protobufjs: ^7.6.5
   postcss: ^8.5.23
   brace-expansion@<3: 2.1.7
