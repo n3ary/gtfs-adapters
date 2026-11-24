@@ -88,7 +88,10 @@ function normalizeStopTimes(input) {
   if (!input) return out;
   if (input instanceof Map) {
     for (const [tripId, stops] of input.entries()) {
-      out.set(tripId, stops.slice().sort((a, b) => (a.sequence ?? a.stop_sequence ?? 0) - (b.sequence ?? b.stop_sequence ?? 0)));
+      out.set(
+        tripId,
+        stops.slice().sort((a, b) => (a.sequence ?? a.stop_sequence ?? 0) - (b.sequence ?? b.stop_sequence ?? 0)),
+      );
     }
     return out;
   }

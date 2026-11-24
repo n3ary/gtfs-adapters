@@ -93,7 +93,7 @@ const OKLAB_DISTINCT_THRESHOLD = 0.15;
 // network-color "family". Tighter than DISTINCT so near-duplicate hues
 // (e.g. three slightly-different blues painted on night routes) combine
 // into a single cluster instead of each casting a singleton vote.
-const OKLAB_CLUSTER_THRESHOLD = 0.10;
+const OKLAB_CLUSTER_THRESHOLD = 0.1;
 
 /** For each `route_type`, find the most-frequent non-placeholder color
  *  in the feed. Returns Map<typeString, color>. Types whose routes are
@@ -115,7 +115,10 @@ export function computeTypeTopColors(rows: RouteRow[] | undefined | null): Map<s
     let bestColor = '';
     let bestCount = 0;
     for (const [color, n] of inner) {
-      if (n > bestCount) { bestCount = n; bestColor = color; }
+      if (n > bestCount) {
+        bestCount = n;
+        bestColor = color;
+      }
     }
     if (bestColor) top.set(type, bestColor);
   }
@@ -124,7 +127,11 @@ export function computeTypeTopColors(rows: RouteRow[] | undefined | null): Map<s
 
 /** Resolve a single row's route_color. Substitution returns the type's
  *  modal; non-placeholder values pass through normalized. */
-export function resolveRouteColor(rawColor: unknown, routeType: string, typeTopColors: Map<string, string>): { color: string; substitutedFrom: 'placeholder' | 'invalid' | null } {
+export function resolveRouteColor(
+  rawColor: unknown,
+  routeType: string,
+  typeTopColors: Map<string, string>,
+): { color: string; substitutedFrom: 'placeholder' | 'invalid' | null } {
   const normalized = normalizeColor(rawColor);
   if (normalized && !KNOWN_PLACEHOLDER_COLORS.has(normalized)) {
     return { color: normalized, substitutedFrom: null };
@@ -147,16 +154,16 @@ export function resolveRouteColor(rawColor: unknown, routeType: string, typeTopC
 // https://bottosson.github.io/posts/oklab/
 
 function hexToRgb(hex: string): [number, number, number] {
-  return [
-    parseInt(hex.slice(0, 2), 16),
-    parseInt(hex.slice(2, 4), 16),
-    parseInt(hex.slice(4, 6), 16),
-  ];
+  return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
 }
 
 function rgbToHex([r, g, b]: [number, number, number]): string {
   return [r, g, b]
-    .map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0'))
+    .map((v) =>
+      Math.max(0, Math.min(255, Math.round(v)))
+        .toString(16)
+        .padStart(2, '0'),
+    )
     .join('')
     .toUpperCase();
 }
@@ -168,9 +175,7 @@ function srgbToLinear(c: number): number {
 
 function linearToSrgb(c: number): number {
   const clamped = Math.max(0, Math.min(1, c));
-  const v = clamped <= 0.0031308
-    ? 12.92 * clamped
-    : 1.055 * clamped ** (1 / 2.4) - 0.055;
+  const v = clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * clamped ** (1 / 2.4) - 0.055;
   return v * 255;
 }
 
@@ -185,23 +190,23 @@ function rgbToOklab([R, G, B]: [number, number, number]): [number, number, numbe
   const m_ = Math.cbrt(m);
   const s_ = Math.cbrt(s);
   return [
-    0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
-    1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
-    0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+    0.2104542553 * l_ + 0.793617785 * m_ - 0.0040720468 * s_,
+    1.9779984951 * l_ - 2.428592205 * m_ + 0.4505937099 * s_,
+    0.0259040371 * l_ + 0.7827717662 * m_ - 0.808675766 * s_,
   ];
 }
 
 function oklabToRgb([L, a, b]: [number, number, number]): [number, number, number] {
   const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
   const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
-  const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+  const s_ = L - 0.0894841775 * a - 1.291485548 * b;
   const lin_l = l_ ** 3;
   const lin_m = m_ ** 3;
   const lin_s = s_ ** 3;
   return [
-    linearToSrgb( 4.0767416621 * lin_l - 3.3077115913 * lin_m + 0.2309699292 * lin_s),
+    linearToSrgb(4.0767416621 * lin_l - 3.3077115913 * lin_m + 0.2309699292 * lin_s),
     linearToSrgb(-1.2684380046 * lin_l + 2.6097574011 * lin_m - 0.3413193965 * lin_s),
-    linearToSrgb(-0.0041960863 * lin_l - 0.7034186147 * lin_m + 1.7076147010 * lin_s),
+    linearToSrgb(-0.0041960863 * lin_l - 0.7034186147 * lin_m + 1.707614701 * lin_s),
   ];
 }
 
@@ -221,7 +226,11 @@ export function oklabDistance(hexA: string, hexB: string): number {
   return Math.sqrt(dL * dL + da * da + db * db);
 }
 
-function findSafeRotation(baseColor: string, idealDegrees: number, forbiddenColors: Iterable<string>): { color: string; degrees: number } {
+function findSafeRotation(
+  baseColor: string,
+  idealDegrees: number,
+  forbiddenColors: Iterable<string>,
+): { color: string; degrees: number } {
   const candidates = [idealDegrees];
   for (let off = 15; off <= 180; off += 15) {
     candidates.push(idealDegrees + off);
@@ -233,9 +242,8 @@ function findSafeRotation(baseColor: string, idealDegrees: number, forbiddenColo
   let bestMinDist = -Infinity;
   for (const deg of candidates) {
     const candidate = rotateHueOklch(baseColor, deg);
-    const minDist = forbidden.length === 0
-      ? Infinity
-      : Math.min(...forbidden.map((fc) => oklabDistance(candidate, fc)));
+    const minDist =
+      forbidden.length === 0 ? Infinity : Math.min(...forbidden.map((fc) => oklabDistance(candidate, fc)));
     if (minDist >= OKLAB_DISTINCT_THRESHOLD) {
       return { color: candidate, degrees: deg };
     }
@@ -265,11 +273,7 @@ export function resolveModalCollisions(
   const skews: Array<{ type: string; fromColor: string; toColor: string }> = [];
   for (const [color, types] of byColor) {
     if (types.length < 2) continue;
-    types.sort(
-      (a, b) =>
-        (routeCountAtModal.get(b) ?? 0) - (routeCountAtModal.get(a) ?? 0) ||
-        Number(a) - Number(b),
-    );
+    types.sort((a, b) => (routeCountAtModal.get(b) ?? 0) - (routeCountAtModal.get(a) ?? 0) || Number(a) - Number(b));
     const N = types.length;
     const step = 360 / N;
     const forbidden = new Set([...allRouteColors].filter((c) => c && c !== color));
@@ -291,9 +295,7 @@ export function resolveModalCollisions(
  * than a singleton.
  */
 function pickModalCluster(colorCounts: Map<string, number>): { rep: string; total: number } | null {
-  const entries = [...colorCounts.entries()].sort(
-    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
-  );
+  const entries = [...colorCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const clusters: Array<{ members: Map<string, number>; total: number }> = [];
   for (const [color, count] of entries) {
     let target: { members: Map<string, number>; total: number } | null = null;
@@ -317,9 +319,13 @@ function pickModalCluster(colorCounts: Map<string, number>): { rep: string; tota
   clusters.sort((a, b) => b.total - a.total);
   const winner = clusters[0]!;
   // Representative: highest-count member, lex-min on ties.
-  let rep = '', repN = -1;
+  let rep = '',
+    repN = -1;
   for (const [c, n] of winner.members) {
-    if (n > repN || (n === repN && c < rep)) { rep = c; repN = n; }
+    if (n > repN || (n === repN && c < rep)) {
+      rep = c;
+      repN = n;
+    }
   }
   return { rep, total: winner.total };
 }
@@ -412,7 +418,10 @@ export function computeNetworkColors(
       for (const deg of candidates) {
         const c = rotateHueOklch(baseColor, deg);
         const minDist = [...forbidden].reduce((mn, fc) => Math.min(mn, oklabDistance(c, fc)), Infinity);
-        if (minDist >= OKLAB_DISTINCT_THRESHOLD) { newColor = c; break; }
+        if (minDist >= OKLAB_DISTINCT_THRESHOLD) {
+          newColor = c;
+          break;
+        }
       }
       modalColors.set(group[i]!, newColor);
       allColors.add(newColor);
@@ -426,9 +435,16 @@ export function computeNetworkColors(
 // Friendly labels for the most common route_type integers. Anything not
 // listed is shown as `type=<N>` in the log lines.
 const TYPE_LABELS: Record<number, string> = {
-  0: 'tram', 1: 'metro', 2: 'rail', 3: 'bus', 4: 'ferry',
-  5: 'cablecar', 6: 'gondola', 7: 'funicular',
-  11: 'trolleybus', 12: 'monorail',
+  0: 'tram',
+  1: 'metro',
+  2: 'rail',
+  3: 'bus',
+  4: 'ferry',
+  5: 'cablecar',
+  6: 'gondola',
+  7: 'funicular',
+  11: 'trolleybus',
+  12: 'monorail',
 };
 
 function typeLabel(t: string): string {
@@ -526,7 +542,9 @@ export function resolveRouteColors(rows: RouteRow[] | null | undefined): { rows:
     const parts = seededTypes
       .sort((a, b) => Number(a) - Number(b))
       .map((t) => `${typeLabel(t)} → #${typeTopColors.get(t)}`);
-    logs.push(`seeded ${seededTypes.length} route_type(s) with no usable color from anchor #${ANCHOR_COLOR} — ${parts.join(', ')}`);
+    logs.push(
+      `seeded ${seededTypes.length} route_type(s) with no usable color from anchor #${ANCHOR_COLOR} — ${parts.join(', ')}`,
+    );
   }
   if (skews.length > 0) {
     const parts = skews.map((s) => `${typeLabel(s.type)} #${s.fromColor} → #${s.toColor}`);

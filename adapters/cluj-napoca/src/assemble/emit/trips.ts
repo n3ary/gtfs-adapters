@@ -1,5 +1,14 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
-import { TripRowSchema, StopTimeRowSchema, ShapeRowSchema, serializeRows, type TripRow, type StopTimeRow, type ShapeRow } from '@n3ary/gtfs-spec/spec';
+import {
+  type ShapeRow,
+  ShapeRowSchema,
+  type StopTimeRow,
+  StopTimeRowSchema,
+  serializeRows,
+  type TripRow,
+  TripRowSchema,
+} from '@n3ary/gtfs-spec/spec';
+
 /**
  * Trips + stop_times reconciliation.
  *
@@ -15,8 +24,8 @@ import { TripRowSchema, StopTimeRowSchema, ShapeRowSchema, serializeRows, type T
  *   e.g. `45_1_LV_9_0721`  (route 45, dir 1, LV service, 9th departure, 07:21)
  */
 
-import { computeStopTimes } from '../../lib/timing.ts';
 import { info, warnMsg } from '../../lib/log-severity.ts';
+import { computeStopTimes } from '../../lib/timing.ts';
 import { canonicalShortName } from '../../sources/ctp-csv/shortname-aliases.ts';
 
 const DEFAULT_TIMING = {
@@ -61,7 +70,7 @@ export function reconcileTripsAndStopTimes(input) {
   /** @type {string[]} */
   const localWarnings = [];
 
-// Aggregate "no pattern" diagnostics by category for a single
+  // Aggregate "no pattern" diagnostics by category for a single
   // summary line at the end of the build (instead of one line per
   // (route, dir, service-day) — that would be hundreds of lines for
   // the full network and drown the build log).
@@ -71,12 +80,12 @@ export function reconcileTripsAndStopTimes(input) {
   let fuzzyMatchCount = 0;
   let rewrittenLongNames = 0;
   const noPatternStats = {
-    bothDirsTranzyMissing: new Set(),   // route: no pattern in Tranzy
-    bothDirsSeedMissing: new Set(),     // route: Tranzy has, but seed missing
-    bothDirsBothMissing: new Set(),     // route: both Tranzy and seed missing
-    oneDirTranzyMissing: new Set(),     // route: 1 dir missing in Tranzy
-    oneDirSeedMissing: new Set(),       // route: 1 dir missing in seed (Tranzy has it)
-    oneDirBothMissing: new Set(),       // route: 1 dir missing in both
+    bothDirsTranzyMissing: new Set(), // route: no pattern in Tranzy
+    bothDirsSeedMissing: new Set(), // route: Tranzy has, but seed missing
+    bothDirsBothMissing: new Set(), // route: both Tranzy and seed missing
+    oneDirTranzyMissing: new Set(), // route: 1 dir missing in Tranzy
+    oneDirSeedMissing: new Set(), // route: 1 dir missing in seed (Tranzy has it)
+    oneDirBothMissing: new Set(), // route: 1 dir missing in both
   };
 
   for (const [routeShortName, byService] of input.byRouteService.entries()) {
@@ -95,7 +104,10 @@ export function reconcileTripsAndStopTimes(input) {
     // otherwise triple-print the same mismatch).
     let headersCsv = null;
     for (const csv of byService.values()) {
-      if (csv) { headersCsv = csv; break; }
+      if (csv) {
+        headersCsv = csv;
+        break;
+      }
     }
     if (!headersCsv) continue;
 
@@ -175,7 +187,14 @@ export function reconcileTripsAndStopTimes(input) {
         const seedMissing = !seedPattern;
         const both = tranzyMissing && seedMissing;
         // Decide which bucket (filled in below once we know both dirs).
-        plans.set(dir, Object.assign(plans.get(dir) ?? {}, { _tranzyMissing: tranzyMissing, _seedMissing: seedMissing, _bothMissing: both }));
+        plans.set(
+          dir,
+          Object.assign(plans.get(dir) ?? {}, {
+            _tranzyMissing: tranzyMissing,
+            _seedMissing: seedMissing,
+            _bothMissing: both,
+          }),
+        );
         continue;
       }
       const orderedStops = pattern.stops
@@ -236,10 +255,8 @@ export function reconcileTripsAndStopTimes(input) {
       if (fuzzy && !exact) fuzzyMatchCount++;
       const csvOriginTrustable = exact || fuzzy;
       const csvHeadsign = dir === 0 ? outLabel : inLabel;
-      const headsign = pattern.headsign
-        || (csvOriginTrustable ? csvHeadsign : null)
-        || routeRow.route_long_name
-        || routeShortName;
+      const headsign =
+        pattern.headsign || (csvOriginTrustable ? csvHeadsign : null) || routeRow.route_long_name || routeShortName;
       const shape = (pattern.shapeId && input.shapesById.get(pattern.shapeId)) || [];
       plans.set(dir, { pattern, orderedStops, csvOriginTrustable, headsign, shape });
     }
@@ -352,18 +369,18 @@ export function reconcileTripsAndStopTimes(input) {
         const fuzzyCat = fuzzyDir === 0 ? cat0 : cat1;
         summary = info(
           `CSV origin label partial match for route_short_name "${routeShortName}": ` +
-          `dir=${exactDir} matches: catalog="${exactCat.name}" (from ${exactCat.source}) == csv="${exactLabel}". ` +
-          `dir=${fuzzyDir} mismatches: catalog="${fuzzyCat.name}" (from ${fuzzyCat.source}) vs csv="${fuzzyLabel}". ` +
-          `Trusting column convention for the unmatched direction.`,
+            `dir=${exactDir} matches: catalog="${exactCat.name}" (from ${exactCat.source}) == csv="${exactLabel}". ` +
+            `dir=${fuzzyDir} mismatches: catalog="${fuzzyCat.name}" (from ${fuzzyCat.source}) vs csv="${fuzzyLabel}". ` +
+            `Trusting column convention for the unmatched direction.`,
         );
       } else if (bothFuzzy) {
         tier = 'fuzzy-both';
         tierMatched = true;
         summary = info(
           `CSV origin labels fuzzy-matched for route_short_name "${routeShortName}": ` +
-          `dir=0 catalog="${cat0.name}" (from ${cat0.source}) ≈ csv="${inLabel}"; ` +
-          `dir=1 catalog="${cat1.name}" (from ${cat1.source}) ≈ csv="${outLabel}". ` +
-          `Catalog and CSV use different precision/spelling for the same stops.`,
+            `dir=0 catalog="${cat0.name}" (from ${cat0.source}) ≈ csv="${inLabel}"; ` +
+            `dir=1 catalog="${cat1.name}" (from ${cat1.source}) ≈ csv="${outLabel}". ` +
+            `Catalog and CSV use different precision/spelling for the same stops.`,
         );
       } else if (anyFuzzy) {
         tier = 'fuzzy-one';
@@ -376,9 +393,9 @@ export function reconcileTripsAndStopTimes(input) {
         const noMatchCat = noMatchDir === 0 ? cat0 : cat1;
         summary = info(
           `CSV origin label mismatch for route_short_name "${routeShortName}": ` +
-          `dir=${fuzzyDir} fuzzy-matched: catalog="${fuzzyCat.name}" (from ${fuzzyCat.source}) ≈ csv="${fuzzyLabel}". ` +
-          `dir=${noMatchDir} doesn't match: catalog="${noMatchCat.name}" (from ${noMatchCat.source}) vs csv="${noMatchLabel}". ` +
-          `Trusting column convention; headsign for the unmatched direction falls back to route_long_name.`,
+            `dir=${fuzzyDir} fuzzy-matched: catalog="${fuzzyCat.name}" (from ${fuzzyCat.source}) ≈ csv="${fuzzyLabel}". ` +
+            `dir=${noMatchDir} doesn't match: catalog="${noMatchCat.name}" (from ${noMatchCat.source}) vs csv="${noMatchLabel}". ` +
+            `Trusting column convention; headsign for the unmatched direction falls back to route_long_name.`,
         );
       } else if (swapTest) {
         // Tier 5: same-direction matching all failed, but cross-direction
@@ -388,8 +405,10 @@ export function reconcileTripsAndStopTimes(input) {
         // published origin label.
         directionReversed = true;
         const s = swapTest;
-        const swap0Exact = s.swap0Exact, swap1Exact = s.swap1Exact;
-        const swap0Fuzzy = s.swap0Fuzzy, swap1Fuzzy = s.swap1Fuzzy;
+        const swap0Exact = s.swap0Exact,
+          swap1Exact = s.swap1Exact;
+        const swap0Fuzzy = s.swap0Fuzzy,
+          swap1Fuzzy = s.swap1Fuzzy;
         const swapBothExact = swap0Exact && swap1Exact;
         const swapBothFuzzy = swap0Fuzzy && swap1Fuzzy;
         const swapAnyExact = swap0Exact || swap1Exact;
@@ -400,9 +419,9 @@ export function reconcileTripsAndStopTimes(input) {
           tierMatched = true;
           summary = info(
             `CSV direction reversed for route_short_name "${routeShortName}": ` +
-            `csv col 0 origin "${inLabel}" matches catalog dir 1 origin "${cat1.name}" (from ${cat1.source}); ` +
-            `csv col 1 origin "${outLabel}" matches catalog dir 0 origin "${cat0.name}" (from ${cat0.source}). ` +
-            `CSV column-to-direction mapping is flipped relative to the catalog; trips emitted with direction_id swapped.`,
+              `csv col 0 origin "${inLabel}" matches catalog dir 1 origin "${cat1.name}" (from ${cat1.source}); ` +
+              `csv col 1 origin "${outLabel}" matches catalog dir 0 origin "${cat0.name}" (from ${cat0.source}). ` +
+              `CSV column-to-direction mapping is flipped relative to the catalog; trips emitted with direction_id swapped.`,
             swapMeta,
           );
         } else if (swapBothFuzzy) {
@@ -415,9 +434,9 @@ export function reconcileTripsAndStopTimes(input) {
           // not data loss.
           summary = info(
             `CSV direction reversed (fuzzy) for route_short_name "${routeShortName}": ` +
-            `csv col 0 origin "${inLabel}" ≈ catalog dir 1 origin "${cat1.name}" (from ${cat1.source}); ` +
-            `csv col 1 origin "${outLabel}" ≈ catalog dir 0 origin "${cat0.name}" (from ${cat0.source}). ` +
-            `Names differ in precision/spelling; CSV column-to-direction mapping is flipped relative to the catalog.`,
+              `csv col 0 origin "${inLabel}" ≈ catalog dir 1 origin "${cat1.name}" (from ${cat1.source}); ` +
+              `csv col 1 origin "${outLabel}" ≈ catalog dir 0 origin "${cat0.name}" (from ${cat0.source}). ` +
+              `Names differ in precision/spelling; CSV column-to-direction mapping is flipped relative to the catalog.`,
             swapMeta,
           );
         } else if (swapAnyExact || swapAnyFuzzy) {
@@ -426,18 +445,18 @@ export function reconcileTripsAndStopTimes(input) {
           // and warn loudly about the asymmetry.
           tier = 'swap-partial';
           tierMatched = true;
-          const exactDir = swap0Exact ? 0 : (swap1Exact ? 1 : null);
+          const exactDir = swap0Exact ? 0 : swap1Exact ? 1 : null;
           const noMatchDir = exactDir === 0 ? 1 : 0;
           summary = warnMsg(
             `CSV direction reversed (partial) for route_short_name "${routeShortName}": ` +
-            (exactDir === 0
-              ? `csv col 0 origin "${inLabel}" matches catalog dir 1 origin "${cat1.name}" (from ${cat1.source}); `
-              : `csv col 1 origin "${outLabel}" matches catalog dir 0 origin "${cat0.name}" (from ${cat0.source}); `) +
-            (exactDir === 0
-              ? `csv col 1 origin "${outLabel}" does NOT match catalog dir 0 origin "${cat0.name}" (from ${cat0.source}). `
-              : `csv col 0 origin "${inLabel}" does NOT match catalog dir 1 origin "${cat1.name}" (from ${cat1.source}). `) +
-            `Asymmetric — assuming operator swapped the columns but one terminal is renamed/missing. ` +
-            `Headsign for the unmatched direction falls back to catalog.`,
+              (exactDir === 0
+                ? `csv col 0 origin "${inLabel}" matches catalog dir 1 origin "${cat1.name}" (from ${cat1.source}); `
+                : `csv col 1 origin "${outLabel}" matches catalog dir 0 origin "${cat0.name}" (from ${cat0.source}); `) +
+              (exactDir === 0
+                ? `csv col 1 origin "${outLabel}" does NOT match catalog dir 0 origin "${cat0.name}" (from ${cat0.source}). `
+                : `csv col 0 origin "${inLabel}" does NOT match catalog dir 1 origin "${cat1.name}" (from ${cat1.source}). `) +
+              `Asymmetric — assuming operator swapped the columns but one terminal is renamed/missing. ` +
+              `Headsign for the unmatched direction falls back to catalog.`,
             swapMeta,
           );
         } else {
@@ -472,39 +491,38 @@ export function reconcileTripsAndStopTimes(input) {
         // from Tranzy/Transitous and not match the CSV's view.
         const csvRouteLongName = headersCsv?.routeLongName ?? '';
         const csvLongLower = csvRouteLongName.toLowerCase();
-        const inIsPlaceholder = !realStopTokenLen(inLabel)
-          || (csvRouteLongName && inLabel
-              && csvLongLower.includes(inLabel.toLowerCase()));
-        const outIsPlaceholder = !realStopTokenLen(outLabel)
-          || (csvRouteLongName && outLabel
-              && csvLongLower.includes(outLabel.toLowerCase()));
+        const inIsPlaceholder =
+          !realStopTokenLen(inLabel) || (csvRouteLongName && inLabel && csvLongLower.includes(inLabel.toLowerCase()));
+        const outIsPlaceholder =
+          !realStopTokenLen(outLabel) ||
+          (csvRouteLongName && outLabel && csvLongLower.includes(outLabel.toLowerCase()));
         const bothPatternsExist = !!(plan0?.pattern && plan1?.pattern);
-        const patternsAsymmetric = bothPatternsExist && (
-          cat0.name !== '(no pattern)'
-          && cat1.name !== '(no pattern)'
-          && cat0.name !== cat1.name  // different first stops
-        );
+        const patternsAsymmetric =
+          bothPatternsExist && cat0.name !== '(no pattern)' && cat1.name !== '(no pattern)' && cat0.name !== cat1.name; // different first stops
 
         let subtype;
         let actionableHint;
         if (inIsPlaceholder || outIsPlaceholder) {
           subtype = 'csv-placeholder';
-          actionableHint = 'one or both CSV origin labels look like a generic term (matches the CSV\'s own route_long_name substring, or has no real stop name). Operator should fix the CSV.';
+          actionableHint =
+            "one or both CSV origin labels look like a generic term (matches the CSV's own route_long_name substring, or has no real stop name). Operator should fix the CSV.";
         } else if (patternsAsymmetric) {
           subtype = 'no-match-asymmetric';
-          actionableHint = 'catalog patterns for the two directions have different first stops; the catalog itself is out of sync. Operator should ask Tranzy to realign.';
+          actionableHint =
+            'catalog patterns for the two directions have different first stops; the catalog itself is out of sync. Operator should ask Tranzy to realign.';
         } else {
           subtype = 'catalog-out-of-date';
-          actionableHint = 'CSV terminals look like real stops but neither catalog pattern contains them. Operator should ask Tranzy to update the stops for this route.';
+          actionableHint =
+            'CSV terminals look like real stops but neither catalog pattern contains them. Operator should ask Tranzy to update the stops for this route.';
         }
 
         summary = warnMsg(
           `CSV origin labels DO NOT MATCH catalog [${subtype}] for route_short_name "${routeShortName}": ` +
-          `dir=0 catalog="${cat0.name}" (from ${cat0.source}) vs csv="${inLabel}"; ` +
-          `dir=1 catalog="${cat1.name}" (from ${cat1.source}) vs csv="${outLabel}". ` +
-          `${actionableHint} ` +
-          `CSV trip times are still used but no headsign is derived from CSV terminal names. ` +
-          `See docs/quirks-and-rules.md#origin-label-matching.`,
+            `dir=0 catalog="${cat0.name}" (from ${cat0.source}) vs csv="${inLabel}"; ` +
+            `dir=1 catalog="${cat1.name}" (from ${cat1.source}) vs csv="${outLabel}". ` +
+            `${actionableHint} ` +
+            `CSV trip times are still used but no headsign is derived from CSV terminal names. ` +
+            `See docs/quirks-and-rules.md#origin-label-matching.`,
           { route: routeShortName, subtype, inIsPlaceholder, outIsPlaceholder, patternsAsymmetric },
         );
       }
@@ -536,9 +554,7 @@ export function reconcileTripsAndStopTimes(input) {
       // catalog has 4 distinct terminal names (the route 30 hypothetical
       // where dir 0 and dir 1 patterns don't connect).
       if (inLabel && outLabel) {
-        const rewritten = directionReversed
-          ? `${outLabel} - ${inLabel}`
-          : `${inLabel} - ${outLabel}`;
+        const rewritten = directionReversed ? `${outLabel} - ${inLabel}` : `${inLabel} - ${outLabel}`;
         if (routeRow.route_long_name !== rewritten) {
           routeRow.route_long_name = rewritten;
           rewrittenLongNames++;
@@ -596,7 +612,13 @@ export function reconcileTripsAndStopTimes(input) {
           });
 
           const startSec = hhmmToSeconds(depTime);
-          const { arrivals, departures: stopDeps, shapeDistTraveledM, bucket, speedKmh } = computeStopTimes({
+          const {
+            arrivals,
+            departures: stopDeps,
+            shapeDistTraveledM,
+            bucket,
+            speedKmh,
+          } = computeStopTimes({
             startSec,
             stops: orderedStops,
             shape,
@@ -637,27 +659,34 @@ export function reconcileTripsAndStopTimes(input) {
   // lost trip generation because Tranzy/seed patterns were missing,
   // and which source is to blame.
   if (fuzzyMatchCount > 0) {
-    localWarnings.push(info(
-      `origin validation: ${fuzzyMatchCount} (route, dir) pair(s) used fuzzy word-token matching to align catalog ↔ CSV origin labels ` +
-      `(not exact match). See docs/quirks-and-rules.md#fuzzy-origin-matching.`,
-    ));
+    localWarnings.push(
+      info(
+        `origin validation: ${fuzzyMatchCount} (route, dir) pair(s) used fuzzy word-token matching to align catalog ↔ CSV origin labels ` +
+          `(not exact match). See docs/quirks-and-rules.md#fuzzy-origin-matching.`,
+      ),
+    );
   }
   if (rewrittenLongNames > 0) {
-    localWarnings.push(info(
-      `routes: ${rewrittenLongNames} route_long_name(s) rewritten from CSV in/out (catalog was stale — pattern traversal found a clean resolution, ` +
-      `CSV terminals are more accurate). See docs/quirks-and-rules.md#route-long-name-rewrite-from-csv.`,
-    ));
+    localWarnings.push(
+      info(
+        `routes: ${rewrittenLongNames} route_long_name(s) rewritten from CSV in/out (catalog was stale — pattern traversal found a clean resolution, ` +
+          `CSV terminals are more accurate). See docs/quirks-and-rules.md#route-long-name-rewrite-from-csv.`,
+      ),
+    );
   }
-  const totalRoutes = noPatternStats.bothDirsBothMissing.size
-    + noPatternStats.bothDirsTranzyMissing.size
-    + noPatternStats.bothDirsSeedMissing.size
-    + noPatternStats.oneDirBothMissing.size
-    + noPatternStats.oneDirTranzyMissing.size
-    + noPatternStats.oneDirSeedMissing.size;
+  const totalRoutes =
+    noPatternStats.bothDirsBothMissing.size +
+    noPatternStats.bothDirsTranzyMissing.size +
+    noPatternStats.bothDirsSeedMissing.size +
+    noPatternStats.oneDirBothMissing.size +
+    noPatternStats.oneDirTranzyMissing.size +
+    noPatternStats.oneDirSeedMissing.size;
   if (totalRoutes > 0) {
     const parts = [];
     if (noPatternStats.bothDirsBothMissing.size > 0) {
-      parts.push(`${noPatternStats.bothDirsBothMissing.size} routes (both directions) — missing in Tranzy AND Transitous seed`);
+      parts.push(
+        `${noPatternStats.bothDirsBothMissing.size} routes (both directions) — missing in Tranzy AND Transitous seed`,
+      );
     }
     if (noPatternStats.bothDirsTranzyMissing.size > 0) {
       parts.push(`${noPatternStats.bothDirsTranzyMissing.size} routes (both directions) — missing in Tranzy`);
@@ -674,7 +703,11 @@ export function reconcileTripsAndStopTimes(input) {
     if (noPatternStats.oneDirSeedMissing.size > 0) {
       parts.push(`${noPatternStats.oneDirSeedMissing.size} routes (one direction) — missing in Transitous seed`);
     }
-    localWarnings.push(warnMsg(`trips: ${totalRoutes} routes have no usable pattern — ${parts.join('; ')}. Trips for these (route, dir) are dropped.`));
+    localWarnings.push(
+      warnMsg(
+        `trips: ${totalRoutes} routes have no usable pattern — ${parts.join('; ')}. Trips for these (route, dir) are dropped.`,
+      ),
+    );
   }
 
   input.warnings.push(...localWarnings);
@@ -770,18 +803,25 @@ function hhmmToSeconds(hhmm) {
  */
 export function normalizeStopName(s) {
   if (!s) return '';
-  return s.toString().toLowerCase()
-    .replace(/ă/g, 'a').replace(/â/g, 'a').replace(/î/g, 'i')
-    .replace(/ș/g, 's').replace(/ț/g, 't')
-    // Collapse punctuation followed by whitespace ("E. Quinet" vs
-    // "E.Quinet") so labels that differ only in spacing after a
-    // period compare equal. Route 19's CSV "E. Quinet Sud" and
-    // Tranzy's "E.Quinet Sud" hit this — without normalization, the
-    // tier fell back to "exact-one" (whitespace mismatch) and the
-    // route_long_name rewrite never fired.
-    .replace(/([.,;:])\s+/g, '$1')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (
+    s
+      .toString()
+      .toLowerCase()
+      .replace(/ă/g, 'a')
+      .replace(/â/g, 'a')
+      .replace(/î/g, 'i')
+      .replace(/ș/g, 's')
+      .replace(/ț/g, 't')
+      // Collapse punctuation followed by whitespace ("E. Quinet" vs
+      // "E.Quinet") so labels that differ only in spacing after a
+      // period compare equal. Route 19's CSV "E. Quinet Sud" and
+      // Tranzy's "E.Quinet Sud" hit this — without normalization, the
+      // tier fell back to "exact-one" (whitespace mismatch) and the
+      // route_long_name rewrite never fired.
+      .replace(/([.,;:])\s+/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 }
 
 export function terminalNamesMatch(a, b) {
@@ -808,11 +848,15 @@ export function terminalNamesMatch(a, b) {
   // Single-character tokens ("M" prefix for metropolitan lines) are
   // ignored to avoid false positives.
   const tokenize = (s) => {
-    const normalized = s.toString().toLowerCase()
-      .replace(/ă/g, 'a').replace(/â/g, 'a').replace(/î/g, 'i')
-      .replace(/ș/g, 's').replace(/ț/g, 't');
-    return (normalized.match(/[a-z0-9]+/g) ?? [])
-      .filter((t) => t.length >= 4);
+    const normalized = s
+      .toString()
+      .toLowerCase()
+      .replace(/ă/g, 'a')
+      .replace(/â/g, 'a')
+      .replace(/î/g, 'i')
+      .replace(/ș/g, 's')
+      .replace(/ț/g, 't');
+    return (normalized.match(/[a-z0-9]+/g) ?? []).filter((t) => t.length >= 4);
   };
   const tokensA = tokenize(a);
   const tokensB = tokenize(b);

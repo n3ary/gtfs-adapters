@@ -37,7 +37,9 @@ function checkAgencyCount(agencyTxt, warnings) {
     return;
   }
   if (dataRows.length > 1) {
-    warnings.push(info(`seed agency.txt has ${dataRows.length} rows (expected 1 for single-agency feed; see neary#87)`));
+    warnings.push(
+      info(`seed agency.txt has ${dataRows.length} rows (expected 1 for single-agency feed; see neary#87)`),
+    );
   }
 }
 
@@ -64,13 +66,16 @@ function checkZeroTripRoutes(csvByRoute, tripCountByRouteId, warnings) {
     }
   }
   if (zeroTripRoutes.length === 0) return;
-  const sample = zeroTripRoutes.length <= 10
-    ? zeroTripRoutes.join(', ')
-    : `${zeroTripRoutes.slice(0, 10).join(', ')}, ... and ${zeroTripRoutes.length - 10} more`;
-  warnings.push(warnMsg(
-    `${zeroTripRoutes.length} route(s) emitted 0 trips despite having CSV data — ` +
-    `[${sample}]. Likely pattern-resolution failure (neary-gtfs#15).`,
-  ));
+  const sample =
+    zeroTripRoutes.length <= 10
+      ? zeroTripRoutes.join(', ')
+      : `${zeroTripRoutes.slice(0, 10).join(', ')}, ... and ${zeroTripRoutes.length - 10} more`;
+  warnings.push(
+    warnMsg(
+      `${zeroTripRoutes.length} route(s) emitted 0 trips despite having CSV data — ` +
+        `[${sample}]. Likely pattern-resolution failure (neary-gtfs#15).`,
+    ),
+  );
 }
 
 function findRouteIdByShortName(tripCountByRouteId, shortName, csvByRoute) {
@@ -91,6 +96,8 @@ function checkCsvWarnings(csvByRoute, warnings) {
     }
   }
   if (dropped > 0) {
-    warnings.push(info(`${dropped} CSV cell(s) dropped as non-HH:MM (see docs/csv-timetable-format.md § frequency annotations)`));
+    warnings.push(
+      info(`${dropped} CSV cell(s) dropped as non-HH:MM (see docs/csv-timetable-format.md § frequency annotations)`),
+    );
   }
 }

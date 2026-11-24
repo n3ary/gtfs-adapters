@@ -1,6 +1,6 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { reconcile } from '../src/assemble/index.ts';
 import { parseCtpCsv } from '../src/sources/ctp-csv/index.ts';
@@ -8,7 +8,7 @@ import { fixtures } from './fixtures/index.ts';
 import { buildFixtureSeedMemory } from './fixtures/seed-builder.ts';
 
 function buildCsvByRouteService() {
-// @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
+  // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
   /** @type {Map<string, Map<string, any>>} */
   const out = new Map();
   for (const [shortName, bySvc] of Object.entries(fixtures.csv)) {
@@ -67,7 +67,12 @@ describe('reconcile', () => {
   it('route 22 from Tranzy (orange, neary-gtfs#14) is included with its Tranzy color', async () => {
     // Non-black Tranzy colors are passed through unchanged; only black /
     // missing values get substituted with the per-type modal color.
-    const { files } = await reconcile({ seed, tranzy: fixtures.tranzy, csv, options: { buildDate: new Date('2026-06-29') } });
+    const { files } = await reconcile({
+      seed,
+      tranzy: fixtures.tranzy,
+      csv,
+      options: { buildDate: new Date('2026-06-29') },
+    });
     const routesLines = files['routes.txt'].split('\n');
     const r22 = routesLines.find((l) => l.startsWith('22,'));
     expect(r22).toBeTruthy();
@@ -75,9 +80,16 @@ describe('reconcile', () => {
   });
 
   it('M26 direction=1 is resolvable via Tranzy fallback (fixes #15)', async () => {
-    const { warnings } = await reconcile({ seed, tranzy: fixtures.tranzy, csv, options: { buildDate: new Date('2026-06-29') } });
+    const { warnings } = await reconcile({
+      seed,
+      tranzy: fixtures.tranzy,
+      csv,
+      options: { buildDate: new Date('2026-06-29') },
+    });
     // We should NOT have a warning about M26 dir=1 having no pattern.
-    const has = warnings.some((w) => w.message.includes('M26') && w.message.includes('dir=1') && w.message.includes('No pattern'));
+    const has = warnings.some(
+      (w) => w.message.includes('M26') && w.message.includes('dir=1') && w.message.includes('No pattern'),
+    );
     expect(has).toBe(false);
   });
 
@@ -183,7 +195,12 @@ describe('reconcile', () => {
       shapes: [],
       calendar: [],
     };
-    const { files, warnings } = await reconcile({ seed, tranzy: phantomTranzy, csv, options: { buildDate: new Date('2026-06-29') } });
+    const { files, warnings } = await reconcile({
+      seed,
+      tranzy: phantomTranzy,
+      csv,
+      options: { buildDate: new Date('2026-06-29') },
+    });
     const routesLines = files['routes.txt'].split('\n').slice(1).filter(Boolean);
     expect(routesLines.find((l) => l.startsWith('999,'))).toBeUndefined();
     const phantomWarn = warnings.find((w) => w.message.includes('phantom route'));
@@ -202,9 +219,7 @@ describe('reconcile', () => {
         { route_id: '888', agency_id: 2, route_short_name: 'M99', route_long_name: 'M99 Metroline', route_type: 3 },
       ],
       stops: [],
-      trips: [
-        { trip_id: 'tranzy-M99-fwd', route_id: '888', direction_id: 0, trip_headsign: 'M99' },
-      ],
+      trips: [{ trip_id: 'tranzy-M99-fwd', route_id: '888', direction_id: 0, trip_headsign: 'M99' }],
       stop_times: [
         { trip_id: 'tranzy-M99-fwd', stop_id: 'A', stop_sequence: 0 },
         { trip_id: 'tranzy-M99-fwd', stop_id: 'B', stop_sequence: 1 },
@@ -212,7 +227,12 @@ describe('reconcile', () => {
       shapes: [],
       calendar: [],
     };
-    const { files, warnings } = await reconcile({ seed, tranzy: fallbackTranzy, csv, options: { buildDate: new Date('2026-06-29') } });
+    const { files, warnings } = await reconcile({
+      seed,
+      tranzy: fallbackTranzy,
+      csv,
+      options: { buildDate: new Date('2026-06-29') },
+    });
     const routesLines = files['routes.txt'].split('\n').slice(1).filter(Boolean);
     expect(routesLines.find((l) => l.startsWith('888,'))).toBeDefined();
     const phantomWarn = warnings.find((w) => w.message.includes('phantom route'));
@@ -233,35 +253,45 @@ describe('reconcile', () => {
     // route_desc as the comma-joined label list.
     const tranzy = {
       routes: [
-        { route_id: '93',  route_short_name: 'TE1',  route_long_name: 'Transport Elevi Manastur',             route_type: 3 },
-        { route_id: '145', route_short_name: 'M76A', route_long_name: 'TE2 Floresti str. Somesului',          route_type: 3 },
-        { route_id: '68',  route_short_name: 'M26U', route_long_name: 'Uzinei Electrice - Floresti / Cetate (untold)', route_type: 3 },
-        { route_id: '15',  route_short_name: '25N',  route_long_name: 'Str. Bucium - Str. Unirii',            route_type: 11 },
-        { route_id: '205', route_short_name: 'CS',   route_long_name: 'CURSA SPECIALA',                       route_type: 3 },
+        { route_id: '93', route_short_name: 'TE1', route_long_name: 'Transport Elevi Manastur', route_type: 3 },
+        { route_id: '145', route_short_name: 'M76A', route_long_name: 'TE2 Floresti str. Somesului', route_type: 3 },
+        {
+          route_id: '68',
+          route_short_name: 'M26U',
+          route_long_name: 'Uzinei Electrice - Floresti / Cetate (untold)',
+          route_type: 3,
+        },
+        { route_id: '15', route_short_name: '25N', route_long_name: 'Str. Bucium - Str. Unirii', route_type: 11 },
+        { route_id: '205', route_short_name: 'CS', route_long_name: 'CURSA SPECIALA', route_type: 3 },
         // Regular urban: tag-less, lives in the `normal` network.
-        { route_id: '1',   route_short_name: '1',    route_long_name: 'Str. Bucium - P-ta 1 Mai',             route_type: 3 },
+        { route_id: '1', route_short_name: '1', route_long_name: 'Str. Bucium - P-ta 1 Mai', route_type: 3 },
       ],
       stops: [],
       trips: [
-        { trip_id: 't-93',  route_id: '93',  direction_id: 0, trip_headsign: '' },
+        { trip_id: 't-93', route_id: '93', direction_id: 0, trip_headsign: '' },
         { trip_id: 't-145', route_id: '145', direction_id: 0, trip_headsign: '' },
-        { trip_id: 't-68',  route_id: '68',  direction_id: 0, trip_headsign: '' },
-        { trip_id: 't-15',  route_id: '15',  direction_id: 0, trip_headsign: '' },
+        { trip_id: 't-68', route_id: '68', direction_id: 0, trip_headsign: '' },
+        { trip_id: 't-15', route_id: '15', direction_id: 0, trip_headsign: '' },
         { trip_id: 't-205', route_id: '205', direction_id: 0, trip_headsign: '' },
-        { trip_id: 't-1',   route_id: '1',   direction_id: 0, trip_headsign: '' },
+        { trip_id: 't-1', route_id: '1', direction_id: 0, trip_headsign: '' },
       ],
       stop_times: [
-        { trip_id: 't-93',  stop_id: 'A', stop_sequence: 0 },
+        { trip_id: 't-93', stop_id: 'A', stop_sequence: 0 },
         { trip_id: 't-145', stop_id: 'A', stop_sequence: 0 },
-        { trip_id: 't-68',  stop_id: 'A', stop_sequence: 0 },
-        { trip_id: 't-15',  stop_id: 'A', stop_sequence: 0 },
+        { trip_id: 't-68', stop_id: 'A', stop_sequence: 0 },
+        { trip_id: 't-15', stop_id: 'A', stop_sequence: 0 },
         { trip_id: 't-205', stop_id: 'A', stop_sequence: 0 },
-        { trip_id: 't-1',   stop_id: 'A', stop_sequence: 0 },
+        { trip_id: 't-1', stop_id: 'A', stop_sequence: 0 },
       ],
       shapes: [],
       calendar: [],
     };
-    const { files } = await reconcile({ seed: buildFixtureSeedMemory(), tranzy, csv, options: { buildDate: new Date('2026-06-29') } });
+    const { files } = await reconcile({
+      seed: buildFixtureSeedMemory(),
+      tranzy,
+      csv,
+      options: { buildDate: new Date('2026-06-29') },
+    });
 
     // networks.txt — exactly 2 networks: school (TE*) and normal
     // (everything else). Declared in `getAllNetworks` order:
@@ -273,11 +303,7 @@ describe('reconcile', () => {
     // one network per used tag, which violated the public spec's
     // 1:1 rule (issue #4). The new design is the resolution:
     // networks.txt = 2 rows, period.
-    expect(files['networks.txt']).toBe(
-      'network_id,network_name\n' +
-      'normal,Normal\n' +
-      'school,Transport Elevi\n',
-    );
+    expect(files['networks.txt']).toBe('network_id,network_name\n' + 'normal,Normal\n' + 'school,Transport Elevi\n');
 
     // route_networks.txt -- one row per route, 1:1 by route_id.
     // Sorted by (network_id, route_id) for diff-stability.
@@ -376,9 +402,7 @@ describe('reconcile', () => {
     // (no start/end). After cleanup → empty. The orchestrator should
     // fall back to "<first stop> - <last stop>" from stop_times.
     const tranzy = {
-      routes: [
-        { route_id: '777', route_short_name: '88X', route_long_name: '(untold)', route_type: 3 },
-      ],
+      routes: [{ route_id: '777', route_short_name: '88X', route_long_name: '(untold)', route_type: 3 }],
       stops: [],
       trips: [
         { trip_id: 't-777-a', route_id: '777', direction_id: 0, trip_headsign: '' },
@@ -400,7 +424,10 @@ describe('reconcile', () => {
       calendar: [],
     };
     const { files, warnings } = await reconcile({
-      seed: buildFixtureSeedMemory(), tranzy, csv, options: { buildDate: new Date('2026-06-29') },
+      seed: buildFixtureSeedMemory(),
+      tranzy,
+      csv,
+      options: { buildDate: new Date('2026-06-29') },
     });
 
     const routesTxt = files['routes.txt'];
@@ -468,7 +495,9 @@ out_stop_name,"B"
       warnings: [],
     };
     const { files } = await reconcile({
-      seed: buildFixtureSeedMemory(), tranzy, csv: csvForDup,
+      seed: buildFixtureSeedMemory(),
+      tranzy,
+      csv: csvForDup,
       options: { buildDate: new Date('2026-06-29') },
     });
 
@@ -490,9 +519,7 @@ out_stop_name,"B"
     // Each trip's stop_times are monotonic 0,1,2.
     const stLines = files['stop_times.txt'].split('\n').slice(1).filter(Boolean);
     for (const id of ids) {
-      const seqs = stLines
-        .filter((l) => l.split(',')[0] === id)
-        .map((l) => Number(l.split(',')[4]));
+      const seqs = stLines.filter((l) => l.split(',')[0] === id).map((l) => Number(l.split(',')[4]));
       expect(seqs).toEqual([0, 1, 2]);
     }
 

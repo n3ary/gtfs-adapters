@@ -1,6 +1,7 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
-import { ShapeRowSchema, serializeRows, type ShapeRow } from '@n3ary/gtfs-spec/spec';
+
 import { haversineMeters } from '@n3ary/gtfs-spec/shape';
+import { type ShapeRow, ShapeRowSchema, serializeRows } from '@n3ary/gtfs-spec/spec';
 /**
  * Shapes reconciliation.
  *

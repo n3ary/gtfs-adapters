@@ -39,33 +39,39 @@ export function buildFixtureSeedMemory() {
 }
 
 function parseRoutes(txt) {
-  return splitCsv(txt).slice(1).map((cols) => ({
-    routeId: cols[0],
-    shortName: cols[2],
-    longName: cols[3],
-    type: cols[4],
-    color: cols[5] || '',
-  }));
+  return splitCsv(txt)
+    .slice(1)
+    .map((cols) => ({
+      routeId: cols[0],
+      shortName: cols[2],
+      longName: cols[3],
+      type: cols[4],
+      color: cols[5] || '',
+    }));
 }
 
 function parseStops(txt) {
-  return splitCsv(txt).slice(1).map((cols) => ({
-    stopId: cols[0],
-    name: cols[2],
-    lat: parseFloat(cols[3]),
-    lon: parseFloat(cols[4]),
-  }));
+  return splitCsv(txt)
+    .slice(1)
+    .map((cols) => ({
+      stopId: cols[0],
+      name: cols[2],
+      lat: parseFloat(cols[3]),
+      lon: parseFloat(cols[4]),
+    }));
 }
 
 function parseTrips(txt) {
-  return splitCsv(txt).slice(1).map((cols) => ({
-    routeId: cols[0],
-    serviceId: cols[1],
-    tripId: cols[2],
-    headsign: cols[3],
-    directionId: cols[4] ? Number(cols[4]) : 0,
-    shapeId: cols[5],
-  }));
+  return splitCsv(txt)
+    .slice(1)
+    .map((cols) => ({
+      routeId: cols[0],
+      serviceId: cols[1],
+      tripId: cols[2],
+      headsign: cols[3],
+      directionId: cols[4] ? Number(cols[4]) : 0,
+      shapeId: cols[5],
+    }));
 }
 
 function parseStopTimes(txt) {
@@ -107,8 +113,10 @@ function splitCsv(txt) {
     let inQ = false;
     for (const c of l) {
       if (c === '"') inQ = !inQ;
-      else if (c === ',' && !inQ) { out.push(cur); cur = ''; }
-      else cur += c;
+      else if (c === ',' && !inQ) {
+        out.push(cur);
+        cur = '';
+      } else cur += c;
     }
     out.push(cur);
     return out;

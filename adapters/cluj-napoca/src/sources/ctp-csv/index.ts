@@ -10,18 +10,18 @@
  */
 
 export {
+  buildCtpCsvUrl,
+  CSV_BASE_URL,
+  CSV_SERVICE_ID_MAP,
+  CSV_SERVICE_KEYS,
+  canonicalShortName,
+  classifyCell,
+  fetchAllCsvSchedules,
   // client
   fetchCtpCsv,
-  fetchAllCsvSchedules,
-  buildCtpCsvUrl,
   normalizeShortNameForCtpUrl,
-  canonicalShortName,
-  CSV_BASE_URL,
-  CSV_SERVICE_KEYS,
-  CSV_SERVICE_ID_MAP,
-  // aliases (re-exported so smoke/build can debug 404s by checking the map)
-  TRANZY_TO_CTP_SHORTNAME,
   // parser (re-exported for convenience)
   parseCtpCsv,
-  classifyCell,
+  // aliases (re-exported so smoke/build can debug 404s by checking the map)
+  TRANZY_TO_CTP_SHORTNAME,
 } from './client.ts';

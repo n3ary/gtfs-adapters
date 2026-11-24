@@ -11,7 +11,7 @@
  *   4. The /static subpath does NOT export it (realtime-specific
  *      knowledge belongs in /rt, not /static).
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { extraVehiclePositions } from '../../src/rt/extras.ts';
 import * as rtExports from '../../src/rt/index.ts';
 import * as staticExports from '../../src/static/index.ts';

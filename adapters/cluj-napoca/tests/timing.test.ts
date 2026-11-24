@@ -5,8 +5,8 @@
  * copyright: MIT, Marius Ciotlos.
  */
 
-import { describe, it, expect } from 'vitest';
-import { pickSpeedBucket, computeStopTimes } from '../src/lib/timing.ts';
+import { describe, expect, it } from 'vitest';
+import { computeStopTimes, pickSpeedBucket } from '../src/lib/timing.ts';
 
 const TIMING = {
   speedKmh: { peak: 14, offpeak: 22, night: 28 },
@@ -20,19 +20,19 @@ const TIMING = {
 
 describe('pickSpeedBucket', () => {
   it('picks night for midnight wrap', () => {
-    expect(pickSpeedBucket(0,   TIMING).bucket).toBe('night');
-    expect(pickSpeedBucket(330, TIMING).bucket).toBe('offpeak');   // 05:30
-    expect(pickSpeedBucket(329, TIMING).bucket).toBe('night');     // 05:29
+    expect(pickSpeedBucket(0, TIMING).bucket).toBe('night');
+    expect(pickSpeedBucket(330, TIMING).bucket).toBe('offpeak'); // 05:30
+    expect(pickSpeedBucket(329, TIMING).bucket).toBe('night'); // 05:29
     expect(pickSpeedBucket(23 * 60, TIMING).bucket).toBe('night'); // 23:00
   });
   it('picks peak for morning + evening rush', () => {
-    expect(pickSpeedBucket(7 * 60 + 30, TIMING).bucket).toBe('peak');   // 07:30
-    expect(pickSpeedBucket(17 * 60, TIMING).bucket).toBe('peak');       // 17:00
+    expect(pickSpeedBucket(7 * 60 + 30, TIMING).bucket).toBe('peak'); // 07:30
+    expect(pickSpeedBucket(17 * 60, TIMING).bucket).toBe('peak'); // 17:00
   });
   it('picks offpeak for midday + late afternoon', () => {
-    expect(pickSpeedBucket(12 * 60, TIMING).bucket).toBe('offpeak');    // 12:00
-    expect(pickSpeedBucket(10 * 60, TIMING).bucket).toBe('offpeak');    // 10:00
-    expect(pickSpeedBucket(20 * 60, TIMING).bucket).toBe('offpeak');    // 20:00
+    expect(pickSpeedBucket(12 * 60, TIMING).bucket).toBe('offpeak'); // 12:00
+    expect(pickSpeedBucket(10 * 60, TIMING).bucket).toBe('offpeak'); // 10:00
+    expect(pickSpeedBucket(20 * 60, TIMING).bucket).toBe('offpeak'); // 20:00
   });
   it('normalizes post-midnight minutes (≥ 1440)', () => {
     // 25:30 = 01:30 of the next day → night.
@@ -42,22 +42,22 @@ describe('pickSpeedBucket', () => {
 
 /** Straight-east shape at Cluj latitude. 0.01° lon ≈ 760 m. */
 const SHAPE = [
-  { lat: 46.77, lon: 23.60 },
+  { lat: 46.77, lon: 23.6 },
   { lat: 46.77, lon: 23.61 },
   { lat: 46.77, lon: 23.62 },
   { lat: 46.77, lon: 23.63 },
 ];
 
 const STOPS = [
-  { stopId: 'A', lat: 46.77, lon: 23.605 },   // ~380 m along shape
-  { stopId: 'B', lat: 46.77, lon: 23.615 },   // ~1140 m
-  { stopId: 'C', lat: 46.77, lon: 23.625 },   // ~1900 m
+  { stopId: 'A', lat: 46.77, lon: 23.605 }, // ~380 m along shape
+  { stopId: 'B', lat: 46.77, lon: 23.615 }, // ~1140 m
+  { stopId: 'C', lat: 46.77, lon: 23.625 }, // ~1900 m
 ];
 
 describe('computeStopTimes', () => {
   it('matches the requested origin departure exactly', () => {
     const out = computeStopTimes({
-      startSec: 8 * 3600 + 30 * 60,           // 08:30 — peak
+      startSec: 8 * 3600 + 30 * 60, // 08:30 — peak
       stops: STOPS,
       shape: SHAPE,
       timing: TIMING,
@@ -69,7 +69,7 @@ describe('computeStopTimes', () => {
 
   it('inserts dwell at intermediate stops only', () => {
     const out = computeStopTimes({
-      startSec: 12 * 3600,                     // 12:00 — offpeak
+      startSec: 12 * 3600, // 12:00 — offpeak
       stops: STOPS,
       shape: SHAPE,
       timing: TIMING,
@@ -84,13 +84,13 @@ describe('computeStopTimes', () => {
 
   it('uses faster speed at night than at peak (shorter total trip)', () => {
     const peak = computeStopTimes({
-      startSec: 8 * 3600,           // 08:00 — peak (14 km/h)
+      startSec: 8 * 3600, // 08:00 — peak (14 km/h)
       stops: STOPS,
       shape: SHAPE,
       timing: TIMING,
     });
     const night = computeStopTimes({
-      startSec: 1 * 3600,           // 01:00 — night (28 km/h)
+      startSec: 1 * 3600, // 01:00 — night (28 km/h)
       stops: STOPS,
       shape: SHAPE,
       timing: TIMING,

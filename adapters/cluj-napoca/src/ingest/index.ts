@@ -29,13 +29,12 @@
 
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-
-import { TranzyClient } from '../sources/tranzy/index.ts';
-import { loadTransitousSeed } from '../sources/transitous/index.ts';
-import { fetchAllCsvSchedules, fetchCtpCsv } from '../sources/ctp-csv/index.ts';
-import { CSV_SERVICE_KEYS } from '../sources/ctp-csv/client.ts';
 import { reconcile } from '../assemble/index.ts';
 import { writeGtfsZip } from '../gtfs.ts';
+import { CSV_SERVICE_KEYS } from '../sources/ctp-csv/client.ts';
+import { fetchAllCsvSchedules, fetchCtpCsv } from '../sources/ctp-csv/index.ts';
+import { loadTransitousSeed } from '../sources/transitous/index.ts';
+import { TranzyClient } from '../sources/tranzy/index.ts';
 
 /**
  * Env var name this adapter expects its primary API key under. The
@@ -110,7 +109,7 @@ export async function ingestBuild(opts: IngestOptions): Promise<IngestResult> {
   if (!apiKey) {
     throw new Error(
       `ingestBuild: opts.secrets.TRANZY_API_KEY is required (sign up at https://tranzy.dev/accounts). ` +
-      `The feed config must declare "TRANZY_API_KEY" in its secrets[] list.`,
+        `The feed config must declare "TRANZY_API_KEY" in its secrets[] list.`,
     );
   }
   const outputDir = opts.outputDir;
@@ -139,8 +138,8 @@ export async function ingestBuild(opts: IngestOptions): Promise<IngestResult> {
     tranzyData = await tranzy.fetchAll();
     console.log(
       `[tranzy] fetched ${tranzyData.routes.length} routes, ` +
-      `${tranzyData.stops.length} stops, ${tranzyData.trips.length} trips, ` +
-      `${tranzyData.shapes.length} shape points, ${tranzyData.stop_times.length} stop_times`,
+        `${tranzyData.stops.length} stops, ${tranzyData.trips.length} trips, ` +
+        `${tranzyData.shapes.length} shape points, ${tranzyData.stop_times.length} stop_times`,
     );
   } catch (err) {
     console.warn(`[tranzy] fetchAll failed: ${err.message || err}; continuing with seed-only`);
@@ -195,8 +194,8 @@ export async function ingestBuild(opts: IngestOptions): Promise<IngestResult> {
   const zip = readFileSync(zipPath);
   console.log(
     `[done] ${zipPath} (${(sizeBytes / 1024).toFixed(1)} KB) - ` +
-    `${stats.routes} routes, ${stats.stops} stops, ${stats.shapes} shapes, ` +
-    `${stats.trips} trips, ${stats.stopTimes} stop_times`,
+      `${stats.routes} routes, ${stats.stops} stops, ${stats.shapes} shapes, ` +
+      `${stats.trips} trips, ${stats.stopTimes} stop_times`,
   );
 
   return { zip, sizeBytes, zipPath };

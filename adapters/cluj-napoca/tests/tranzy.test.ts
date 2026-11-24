@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { TranzyClient, TranzyAuthError, TranzyRateLimitError, TranzyError } from '../src/sources/tranzy/index.ts';
+import { TranzyAuthError, TranzyClient, TranzyError, TranzyRateLimitError } from '../src/sources/tranzy/index.ts';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -47,8 +47,7 @@ describe('TranzyClient auth headers', () => {
   });
 
   it('rejects when apiKey is missing', () => {
-    expect(() => new TranzyClient({ apiKey: '', agencyId: 2, fetch: makeFetch([]) }))
-      .toThrow(/apiKey is required/);
+    expect(() => new TranzyClient({ apiKey: '', agencyId: 2, fetch: makeFetch([]) })).toThrow(/apiKey is required/);
   });
 });
 
@@ -81,17 +80,28 @@ describe('TranzyClient response handling', () => {
       new Response('boom', { status: 500 }),
       new Response('boom', { status: 500 }),
     ]);
-    const client = new TranzyClient({ apiKey: 'k', agencyId: 2, rateLimitMs: 0, maxRetries: 3, timeoutMs: 1000, fetch });
+    const client = new TranzyClient({
+      apiKey: 'k',
+      agencyId: 2,
+      rateLimitMs: 0,
+      maxRetries: 3,
+      timeoutMs: 1000,
+      fetch,
+    });
     await expect(client.getRoutes()).rejects.toBeInstanceOf(TranzyError);
     expect(fetch.calls).toHaveLength(4); // 1 + 3 retries
   });
 
   it('retries 429 then succeeds', async () => {
-    const fetch = makeFetch([
-      new Response('slow down', { status: 429 }),
-      jsonResponse([{ route_id: 1 }]),
-    ]);
-    const client = new TranzyClient({ apiKey: 'k', agencyId: 2, rateLimitMs: 0, maxRetries: 3, timeoutMs: 1000, fetch });
+    const fetch = makeFetch([new Response('slow down', { status: 429 }), jsonResponse([{ route_id: 1 }])]);
+    const client = new TranzyClient({
+      apiKey: 'k',
+      agencyId: 2,
+      rateLimitMs: 0,
+      maxRetries: 3,
+      timeoutMs: 1000,
+      fetch,
+    });
     const result = await client.getRoutes();
     expect(result).toEqual([{ route_id: 1 }]);
     expect(fetch.calls).toHaveLength(2);
@@ -112,7 +122,7 @@ describe('TranzyClient.fetchAll', () => {
     const result = await client.fetchAll();
     expect(result.routes).toHaveLength(1);
     expect(result.stops).toHaveLength(1);
-    expect(result.trips).toEqual([]);   // downgraded
+    expect(result.trips).toEqual([]); // downgraded
     expect(result.shapes).toEqual([]);
     expect(result.stop_times).toEqual([]);
     expect(result.calendar).toEqual([]); // 404 also = []

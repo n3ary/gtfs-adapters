@@ -13,7 +13,7 @@
  * loudly.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { reconcileStops, stopsToTxt } from '../src/assemble/merge/stops.ts';
 
 // Minimal GTFS-CSV parser mirroring the orchestrator's
@@ -47,13 +47,11 @@ describe('stopsToTxt (regression: daily-cron column-shift bug)', () => {
     const seed = {
       stops: [
         { stopId: 'S1', name: 'Alpha', lat: 46.77, lon: 23.59 },
-        { stopId: 'S2', name: 'Beta', lat: 46.78, lon: 23.60 },
+        { stopId: 'S2', name: 'Beta', lat: 46.78, lon: 23.6 },
       ],
     };
     const tranzy = {
-      stops: [
-        { stop_id: 'T1', stop_name: 'Gamma', stop_lat: '46.80', stop_lon: '23.62', location_type: '0' },
-      ],
+      stops: [{ stop_id: 'T1', stop_name: 'Gamma', stop_lat: '46.80', stop_lon: '23.62', location_type: '0' }],
     };
 
     const { stops } = reconcileStops({ seed, tranzy, warnings: [] });

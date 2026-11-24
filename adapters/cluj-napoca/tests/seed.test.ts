@@ -1,11 +1,11 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity.
-import { describe, it, expect, vi } from 'vitest';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 
-import { fetchToFile } from '../src/lib/seed.ts';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ZIP_MAGIC } from '@n3ary/gtfs-spec/waf';
+import { describe, expect, it, vi } from 'vitest';
+import { fetchToFile } from '../src/lib/seed.ts';
 
 const URL = 'https://api.transitous.org/gtfs/ro_Cluj-Napoca.gtfs.zip';
 
@@ -34,11 +34,12 @@ describe('fetchToFile (seed-side WAF guard)', () => {
   it('writes a real ZIP body to disk unchanged', async () => {
     const tmp = mkdtempSync(join(tmpdir(), 'seedFetchToFile-'));
     const dest = join(tmp, 'seed.zip');
-    const fetchMock = vi.fn(async () =>
-      new Response(VALID_ZIP_HEAD, {
-        status: 200,
-        headers: { 'Content-Type': 'application/octet-stream' },
-      }),
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(VALID_ZIP_HEAD, {
+          status: 200,
+          headers: { 'Content-Type': 'application/octet-stream' },
+        }),
     );
     await fetchToFile(URL, dest, { fetch: fetchMock });
     const onDisk = readFileSync(dest);
@@ -53,14 +54,14 @@ describe('fetchToFile (seed-side WAF guard)', () => {
     // GTFS shipped to consumers crashed the app on bogus data.
     const tmp = mkdtempSync(join(tmpdir(), 'seedFetchToFile-'));
     const dest = join(tmp, 'seed.zip');
-    const fetchMock = vi.fn(async () =>
-      new Response(CF_CHALLENGE, {
-        status: 200,
-        headers: { 'Content-Type': 'text/html' },
-      }),
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(CF_CHALLENGE, {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        }),
     );
-    await expect(fetchToFile(URL, dest, { fetch: fetchMock }))
-      .rejects.toThrow(/contains ".*" marker/);
+    await expect(fetchToFile(URL, dest, { fetch: fetchMock })).rejects.toThrow(/contains ".*" marker/);
     // Critical: the failed write must leave nothing behind.
     expect(() => readFileSync(dest)).toThrow();
   });
@@ -70,22 +71,19 @@ describe('fetchToFile (seed-side WAF guard)', () => {
     // HTML. Without the magic-bytes check, this would slip through.
     const tmp = mkdtempSync(join(tmpdir(), 'seedFetchToFile-'));
     const dest = join(tmp, 'seed.zip');
-    const fetchMock = vi.fn(async () =>
-      new Response(GENERIC_WAF, {
-        status: 200,
-        headers: { 'Content-Type': 'application/octet-stream' },
-      }),
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(GENERIC_WAF, {
+          status: 200,
+          headers: { 'Content-Type': 'application/octet-stream' },
+        }),
     );
-    await expect(fetchToFile(URL, dest, { fetch: fetchMock }))
-      .rejects.toThrow(/contains ".*" marker/);
+    await expect(fetchToFile(URL, dest, { fetch: fetchMock })).rejects.toThrow(/contains ".*" marker/);
     expect(() => readFileSync(dest)).toThrow();
   });
 
   it('throws on non-2xx status BEFORE running the guard (cheaper path)', async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response('upstream down', { status: 503 }),
-    );
-    await expect(fetchToFile(URL, '/tmp/should-not-be-written.zip', { fetch: fetchMock }))
-      .rejects.toThrow(/HTTP 503/);
+    const fetchMock = vi.fn(async () => new Response('upstream down', { status: 503 }));
+    await expect(fetchToFile(URL, '/tmp/should-not-be-written.zip', { fetch: fetchMock })).rejects.toThrow(/HTTP 503/);
   });
 });

@@ -1,17 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
-import { gunzipSync, gzipSync } from 'node:zlib';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-
-import {
-  staticExtension,
-  applyStaticPostLoad,
-  type ComputedUpdates,
-} from '../../src/static/index.ts';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { SCHEMA } from '@n3ary/gtfs-spec/sql';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { applyStaticPostLoad, type ComputedUpdates, staticExtension } from '../../src/static/index.ts';
 
 /**
  * End-to-end check of staticExtension applied to a SQLite built
@@ -35,7 +30,14 @@ const SYNTHETIC_ROUTE_TAGS = [
   { tag_id: 'night', route_id: 'R1', tag_label: 'Noapte', priority: '3', icon: 'moon', color: '1A1F36' },
   // R2 matches two tags (1:many) — school + metroline. The
   // extension table's whole point is to carry both rows.
-  { tag_id: 'school', route_id: 'R2', tag_label: 'Transport Elevi', priority: '1', icon: 'graduation-cap', color: '8B5CF6' },
+  {
+    tag_id: 'school',
+    route_id: 'R2',
+    tag_label: 'Transport Elevi',
+    priority: '1',
+    icon: 'graduation-cap',
+    color: '8B5CF6',
+  },
   { tag_id: 'metroline', route_id: 'R2', tag_label: 'Metropolitan', priority: '5', icon: 'map-pin', color: '2E7D5B' },
 ];
 
@@ -112,7 +114,11 @@ function applyUpdatesToTestDb(db: DatabaseSync, updates: ComputedUpdates): void 
     }
     db.exec('COMMIT');
   } catch (e) {
-    try { db.exec('ROLLBACK'); } catch { /* original error is the actionable one */ }
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      /* original error is the actionable one */
+    }
     throw e;
   }
 }
@@ -135,7 +141,7 @@ function runExtension(ext: ReturnType<typeof staticExtension>): DatabaseSync {
         );
         for (const row of te.rows) {
           // node:sqlite rest spread variance — same as pipeline.
-          stmt.run(...(colNames.map((c) => (row[c] ?? null)) as Array<string | number | bigint | null | Uint8Array>));
+          stmt.run(...(colNames.map((c) => row[c] ?? null) as Array<string | number | bigint | null | Uint8Array>));
         }
       }
     }
@@ -171,9 +177,7 @@ afterAll(() => {
 describe('staticExtension', () => {
   it('adds networks.network_color + _neary_config + _route_tags + applies route fixup + computes network colors', async () => {
     const ext = staticExtension({ timing: TIMING_BLOCK, routeTags: SYNTHETIC_ROUTE_TAGS });
-    expect(ext.columnExtensions).toEqual([
-      { table: 'networks', column: ['network_color', 'TEXT'] },
-    ]);
+    expect(ext.columnExtensions).toEqual([{ table: 'networks', column: ['network_color', 'TEXT'] }]);
     // Both extension tables are registered (DDL-only, no rows here —
     // rows live in the tableExtensions.rows field).
     expect(Object.keys(ext.tableExtensions ?? {}).sort()).toEqual(['_neary_config', '_route_tags']);
@@ -182,7 +186,10 @@ describe('staticExtension', () => {
     const db = runExtension(ext);
     try {
       // networks.network_color was computed, not NULL, for both networks.
-      const netRows = db.prepare('SELECT network_id, network_color FROM networks ORDER BY network_id').all() as Array<{ network_id: string; network_color: string | null }>;
+      const netRows = db.prepare('SELECT network_id, network_color FROM networks ORDER BY network_id').all() as Array<{
+        network_id: string;
+        network_color: string | null;
+      }>;
       expect(netRows.length).toBe(2);
       for (const r of netRows) {
         expect(r.network_color).toMatch(/^[0-9A-F]{6}$/);
@@ -191,17 +198,18 @@ describe('staticExtension', () => {
       // routes.route_color — R1's placeholder (#000000) was substituted
       // with the per-type modal; R2's FF0000 (the only non-placeholder)
       // was preserved. Both routes end up with a valid 6-char hex.
-      const routeRows = db.prepare('SELECT route_id, route_color FROM routes ORDER BY route_id').all() as Array<{ route_id: string; route_color: string | null }>;
+      const routeRows = db.prepare('SELECT route_id, route_color FROM routes ORDER BY route_id').all() as Array<{
+        route_id: string;
+        route_color: string | null;
+      }>;
       for (const r of routeRows) {
-        expect(r.route_color).not.toBe('000000');  // placeholder gone
+        expect(r.route_color).not.toBe('000000'); // placeholder gone
         expect(r.route_color).toMatch(/^[0-9A-F]{6}$/);
       }
 
       // _neary_config rows — exactly the timing block.
       const cfgRows = db.prepare('SELECT key, value FROM _neary_config').all() as Array<{ key: string; value: string }>;
-      expect(cfgRows).toEqual([
-        { key: 'timing', value: JSON.stringify(TIMING_BLOCK) },
-      ]);
+      expect(cfgRows).toEqual([{ key: 'timing', value: JSON.stringify(TIMING_BLOCK) }]);
 
       // _route_tags rows — the full n:m mapping (R2 = school + metroline).
       // DDL is asserted (table exists, columns match the spec) and
@@ -209,11 +217,36 @@ describe('staticExtension', () => {
       const tagColumns = db.prepare("PRAGMA table_info('_route_tags')").all() as Array<{ name: string }>;
       const colNames = tagColumns.map((c) => c.name).sort();
       expect(colNames).toEqual(['color', 'icon', 'priority', 'route_id', 'tag_id', 'tag_label']);
-      const tagRows = db.prepare('SELECT tag_id, route_id, tag_label, priority, icon, color FROM _route_tags ORDER BY route_id, priority').all() as Array<{ tag_id: string; route_id: string; tag_label: string; priority: number; icon: string | null; color: string | null }>;
+      const tagRows = db
+        .prepare(
+          'SELECT tag_id, route_id, tag_label, priority, icon, color FROM _route_tags ORDER BY route_id, priority',
+        )
+        .all() as Array<{
+        tag_id: string;
+        route_id: string;
+        tag_label: string;
+        priority: number;
+        icon: string | null;
+        color: string | null;
+      }>;
       expect(tagRows).toEqual([
         { tag_id: 'night', route_id: 'R1', tag_label: 'Noapte', priority: 3, icon: 'moon', color: '1A1F36' },
-        { tag_id: 'school', route_id: 'R2', tag_label: 'Transport Elevi', priority: 1, icon: 'graduation-cap', color: '8B5CF6' },
-        { tag_id: 'metroline', route_id: 'R2', tag_label: 'Metropolitan', priority: 5, icon: 'map-pin', color: '2E7D5B' },
+        {
+          tag_id: 'school',
+          route_id: 'R2',
+          tag_label: 'Transport Elevi',
+          priority: 1,
+          icon: 'graduation-cap',
+          color: '8B5CF6',
+        },
+        {
+          tag_id: 'metroline',
+          route_id: 'R2',
+          tag_label: 'Metropolitan',
+          priority: 5,
+          icon: 'map-pin',
+          color: '2E7D5B',
+        },
       ]);
       // 1:many invariant — R2 has 2 rows.
       const r2Count = db.prepare("SELECT COUNT(*) AS c FROM _route_tags WHERE route_id = 'R2'").get() as { c: number };
@@ -228,7 +261,7 @@ describe('staticExtension', () => {
     rmSync(WORK, { recursive: true, force: true });
     buildSyntheticSqlite();
     const ext = staticExtension({});
-    expect((ext.tableExtensions?._neary_config?.rows?.length ?? 0)).toBe(0);
+    expect(ext.tableExtensions?._neary_config?.rows?.length ?? 0).toBe(0);
     // _route_tags table is still registered (DDL-only) even with no
     // rows — consumers can `SELECT ... LIMIT 0` without an error.
     expect(ext.tableExtensions?._route_tags?.rows?.length ?? 0).toBe(0);
@@ -263,7 +296,16 @@ describe('staticExtension', () => {
     });
     const db = runExtension(ext);
     try {
-      const rows = db.prepare('SELECT tag_id, route_id, tag_label, priority, icon, color FROM _route_tags').all() as Array<{ tag_id: string; route_id: string; tag_label: string | null; priority: number | null; icon: string | null; color: string | null }>;
+      const rows = db
+        .prepare('SELECT tag_id, route_id, tag_label, priority, icon, color FROM _route_tags')
+        .all() as Array<{
+        tag_id: string;
+        route_id: string;
+        tag_label: string | null;
+        priority: number | null;
+        icon: string | null;
+        color: string | null;
+      }>;
       expect(rows).toEqual([
         { tag_id: 'school', route_id: 'R1', tag_label: null, priority: null, icon: null, color: null },
       ]);

@@ -1,5 +1,5 @@
 // @ts-nocheck - tests use many `routes.find(...)!` patterns; full strict typing is a follow-up.
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { reconcileRoutes, routesToTxt } from '../src/assemble/merge/routes.ts';
 
@@ -39,27 +39,25 @@ describe('reconcileRoutes — color spec compliance', () => {
     expect(r.route_color).toBe('ABCDEF');
   });
 
-  it("falls back to FFFFFF for route_color only when Tranzy/seed are empty AND the type has no modal color", () => {
+  it('falls back to FFFFFF for route_color only when Tranzy/seed are empty AND the type has no modal color', () => {
     // Single route of an unknown type, no color → no modal to derive
     // from, so the GTFS consumer default (FFFFFF) applies.
     const tranzy = {
-      routes: [
-        { route_id: '52', route_short_name: '52', route_long_name: 'No Color', route_type: 99 },
-      ],
+      routes: [{ route_id: '52', route_short_name: '52', route_long_name: 'No Color', route_type: 99 }],
     };
     const { routes } = reconcileRoutes({ seed: seedOf([]), tranzy, warnings: [] });
     const r = routes.find((x) => x.route_short_name === '52')!;
     expect(r.route_color).toBe('FFFFFF');
   });
 
-  it("substitutes black/missing route_color with the per-type modal non-black color", () => {
+  it('substitutes black/missing route_color with the per-type modal non-black color', () => {
     // Type=3 (bus): 1 route with '#F3513C', 1 with '000', 1 with no
     // color. The two non-modal routes both get '#F3513C' substituted.
     const tranzy = {
       routes: [
         { route_id: '1', route_short_name: '1', route_long_name: 'Modal', route_type: 3, route_color: '#F3513C' },
         { route_id: '2', route_short_name: '2', route_long_name: 'Black', route_type: 3, route_color: '000' },
-        { route_id: '3', route_short_name: '3', route_long_name: 'None',  route_type: 3 },
+        { route_id: '3', route_short_name: '3', route_long_name: 'None', route_type: 3 },
       ],
     };
     const { routes } = reconcileRoutes({ seed: seedOf([]), tranzy, warnings: [] });
@@ -68,16 +66,16 @@ describe('reconcileRoutes — color spec compliance', () => {
     expect(routes.find((r) => r.route_short_name === '3').route_color).toBe('F3513C');
   });
 
-  it("preserves non-black one-off Tranzy colors (modal substitution only fires on black/missing)", () => {
+  it('preserves non-black one-off Tranzy colors (modal substitution only fires on black/missing)', () => {
     // Type=3 with the canonical orange-red modal, plus a one-off blue.
     // The blue route keeps its color; only the black '000' gets
     // substituted with the modal.
     const tranzy = {
       routes: [
-        { route_id: '1', route_short_name: '1', route_long_name: 'Modal',  route_type: 3, route_color: '#F3513C' },
+        { route_id: '1', route_short_name: '1', route_long_name: 'Modal', route_type: 3, route_color: '#F3513C' },
         { route_id: '2', route_short_name: '2', route_long_name: 'Modal2', route_type: 3, route_color: '#F3513C' },
         { route_id: '3', route_short_name: '3', route_long_name: 'OneOff', route_type: 3, route_color: '#5500FF' },
-        { route_id: '4', route_short_name: '4', route_long_name: 'Black',  route_type: 3, route_color: '000' },
+        { route_id: '4', route_short_name: '4', route_long_name: 'Black', route_type: 3, route_color: '000' },
       ],
     };
     const { routes } = reconcileRoutes({ seed: seedOf([]), tranzy, warnings: [] });
@@ -100,15 +98,15 @@ describe('reconcileRoutes — color spec compliance', () => {
     expect(sub.message).toMatch(/F3513C/);
   });
 
-  it("substitutes invalid (non-hex) route_color with the per-type modal color, tracked separately from placeholder", () => {
+  it('substitutes invalid (non-hex) route_color with the per-type modal color, tracked separately from placeholder', () => {
     // Three buses: one valid modal, one literal 'xxx' (invalid), one
     // 7-char garbage (also invalid). Both garbage routes get F3513C.
     // The INFO log distinguishes 'invalid' from 'placeholder'.
     const tranzy = {
       routes: [
         { route_id: '1', route_short_name: '1', route_long_name: 'Modal', route_type: 3, route_color: '#F3513C' },
-        { route_id: '2', route_short_name: '2', route_long_name: 'Bad1',  route_type: 3, route_color: 'xxx' },
-        { route_id: '3', route_short_name: '3', route_long_name: 'Bad2',  route_type: 3, route_color: '#ZZZZZZ' },
+        { route_id: '2', route_short_name: '2', route_long_name: 'Bad1', route_type: 3, route_color: 'xxx' },
+        { route_id: '3', route_short_name: '3', route_long_name: 'Bad2', route_type: 3, route_color: '#ZZZZZZ' },
       ],
     };
     const warnings: any[] = [];
@@ -123,7 +121,7 @@ describe('reconcileRoutes — color spec compliance', () => {
     expect(placeholderLine).toBeFalsy();
   });
 
-  it("resolves a 2-type modal-color collision by hue-rotating the lower-count type and emits an INFO", () => {
+  it('resolves a 2-type modal-color collision by hue-rotating the lower-count type and emits an INFO', () => {
     // Tranzy's CTP catalog has tram + bus + most trolleybuses centered
     // on the same modal — when types collide, the type with the most
     // routes at the colliding color keeps it; smaller types get
@@ -133,9 +131,9 @@ describe('reconcileRoutes — color spec compliance', () => {
         { route_id: '100', route_short_name: '100', route_long_name: 'Tram1', route_type: 0, route_color: '#F3513C' },
         { route_id: '101', route_short_name: '101', route_long_name: 'Tram2', route_type: 0, route_color: '#F3513C' },
         // Three buses to outweigh the trams — bus is the "kept" type.
-        { route_id: '5',   route_short_name: '5',   route_long_name: 'Bus1',  route_type: 3, route_color: '#F3513C' },
-        { route_id: '6',   route_short_name: '6',   route_long_name: 'Bus2',  route_type: 3, route_color: '#F3513C' },
-        { route_id: '7',   route_short_name: '7',   route_long_name: 'Bus3',  route_type: 3, route_color: '#F3513C' },
+        { route_id: '5', route_short_name: '5', route_long_name: 'Bus1', route_type: 3, route_color: '#F3513C' },
+        { route_id: '6', route_short_name: '6', route_long_name: 'Bus2', route_type: 3, route_color: '#F3513C' },
+        { route_id: '7', route_short_name: '7', route_long_name: 'Bus3', route_type: 3, route_color: '#F3513C' },
       ],
     };
     const warnings: any[] = [];
@@ -155,14 +153,14 @@ describe('reconcileRoutes — color spec compliance', () => {
     expect(collision.message).toMatch(/F3513C/);
   });
 
-  it("preserves one-off (non-modal) Tranzy colors when resolving a collision", () => {
+  it('preserves one-off (non-modal) Tranzy colors when resolving a collision', () => {
     // Trolley `5N` is blue (#1500FF) — a one-off, not the type's modal.
     // After collision resolution between bus and trolleybus modals,
     // the blue one-off must stay blue; only modal routes get skewed.
     const tranzy = {
       routes: [
-        { route_id: '5',  route_short_name: '5',  route_long_name: 'Bus1',     route_type: 3,  route_color: '#F3513C' },
-        { route_id: '6',  route_short_name: '6',  route_long_name: 'Bus2',     route_type: 3,  route_color: '#F3513C' },
+        { route_id: '5', route_short_name: '5', route_long_name: 'Bus1', route_type: 3, route_color: '#F3513C' },
+        { route_id: '6', route_short_name: '6', route_long_name: 'Bus2', route_type: 3, route_color: '#F3513C' },
         { route_id: '10', route_short_name: '10', route_long_name: 'Trolley1', route_type: 11, route_color: '#F3513C' },
         { route_id: '5N', route_short_name: '5N', route_long_name: 'TrolleyN', route_type: 11, route_color: '#1500FF' },
       ],
@@ -175,7 +173,7 @@ describe('reconcileRoutes — color spec compliance', () => {
     expect(routes.find((r) => r.route_short_name === '10')!.route_color).not.toBe('F3513C');
   });
 
-  it("back-fills placeholder-substituted routes with the post-skew color", () => {
+  it('back-fills placeholder-substituted routes with the post-skew color', () => {
     // A black trolleybus first gets substituted with the type's modal
     // (F3513C from the one valid trolley). Then the collision between
     // bus and trolley modal triggers skew. The originally-black
@@ -183,8 +181,8 @@ describe('reconcileRoutes — color spec compliance', () => {
     // modal — back-fill is keyed on current route_color.
     const tranzy = {
       routes: [
-        { route_id: '5',  route_short_name: '5',  route_long_name: 'Bus1',     route_type: 3,  route_color: '#F3513C' },
-        { route_id: '6',  route_short_name: '6',  route_long_name: 'Bus2',     route_type: 3,  route_color: '#F3513C' },
+        { route_id: '5', route_short_name: '5', route_long_name: 'Bus1', route_type: 3, route_color: '#F3513C' },
+        { route_id: '6', route_short_name: '6', route_long_name: 'Bus2', route_type: 3, route_color: '#F3513C' },
         { route_id: '10', route_short_name: '10', route_long_name: 'Trolley1', route_type: 11, route_color: '#F3513C' },
         { route_id: '11', route_short_name: '11', route_long_name: 'TrolleyB', route_type: 11, route_color: '000' },
       ],
@@ -197,20 +195,20 @@ describe('reconcileRoutes — color spec compliance', () => {
     expect(trolley1).not.toBe('000000');
   });
 
-  it("distributes 3 colliding types around the OKLCh wheel (all distinct outputs)", () => {
+  it('distributes 3 colliding types around the OKLCh wheel (all distinct outputs)', () => {
     // All three types at the same modal. Bus has the most routes ->
     // keeps F3513C. Tram and trolleybus get rotated by +120° and +240°.
     const tranzy = {
       routes: [
-        { route_id: '100', route_short_name: '100', route_long_name: 'Tram', route_type: 0,  route_color: '#F3513C' },
-        { route_id: '5',   route_short_name: '5',   route_long_name: 'Bus1', route_type: 3,  route_color: '#F3513C' },
-        { route_id: '6',   route_short_name: '6',   route_long_name: 'Bus2', route_type: 3,  route_color: '#F3513C' },
-        { route_id: '10',  route_short_name: '10',  route_long_name: 'Trolley', route_type: 11, route_color: '#F3513C' },
+        { route_id: '100', route_short_name: '100', route_long_name: 'Tram', route_type: 0, route_color: '#F3513C' },
+        { route_id: '5', route_short_name: '5', route_long_name: 'Bus1', route_type: 3, route_color: '#F3513C' },
+        { route_id: '6', route_short_name: '6', route_long_name: 'Bus2', route_type: 3, route_color: '#F3513C' },
+        { route_id: '10', route_short_name: '10', route_long_name: 'Trolley', route_type: 11, route_color: '#F3513C' },
       ],
     };
     const { routes } = reconcileRoutes({ seed: seedOf([]), tranzy, warnings: [] });
     const tram = routes.find((r) => r.route_short_name === '100')!.route_color;
-    const bus  = routes.find((r) => r.route_short_name === '5')!.route_color;
+    const bus = routes.find((r) => r.route_short_name === '5')!.route_color;
     const trolley = routes.find((r) => r.route_short_name === '10')!.route_color;
     expect(bus).toBe('F3513C');
     expect(new Set([tram, bus, trolley]).size).toBe(3);
@@ -220,7 +218,7 @@ describe('reconcileRoutes — color spec compliance', () => {
     const tranzy = {
       routes: [
         { route_id: '100', route_short_name: '100', route_long_name: 'Tram', route_type: 0, route_color: '#3BAC2C' },
-        { route_id: '5',   route_short_name: '5',   route_long_name: 'Bus',  route_type: 3, route_color: '#F3513C' },
+        { route_id: '5', route_short_name: '5', route_long_name: 'Bus', route_type: 3, route_color: '#F3513C' },
       ],
     };
     const warnings: any[] = [];
@@ -229,7 +227,7 @@ describe('reconcileRoutes — color spec compliance', () => {
     expect(collision).toBeFalsy();
   });
 
-  it("nudges the OKLCh skew away from existing one-off colors instead of landing on them", () => {
+  it('nudges the OKLCh skew away from existing one-off colors instead of landing on them', () => {
     // Mirrors Tranzy's CTP catalog shape: tram + bus collision on
     // #F3513C, with several blue one-offs in the catalog (#002FFF,
     // #0D00FF, #1500FF). A naive +180° rotation of #F3513C lands on
@@ -238,13 +236,13 @@ describe('reconcileRoutes — color spec compliance', () => {
     const tranzy = {
       routes: [
         // Tram collides with bus, with bus winning by count.
-        { route_id: '100', route_short_name: '100', route_long_name: 'Tram',  route_type: 0, route_color: '#F3513C' },
-        { route_id: '5',   route_short_name: '5',   route_long_name: 'Bus1',  route_type: 3, route_color: '#F3513C' },
-        { route_id: '6',   route_short_name: '6',   route_long_name: 'Bus2',  route_type: 3, route_color: '#F3513C' },
+        { route_id: '100', route_short_name: '100', route_long_name: 'Tram', route_type: 0, route_color: '#F3513C' },
+        { route_id: '5', route_short_name: '5', route_long_name: 'Bus1', route_type: 3, route_color: '#F3513C' },
+        { route_id: '6', route_short_name: '6', route_long_name: 'Bus2', route_type: 3, route_color: '#F3513C' },
         // Blue one-offs that would conflict with naive cyan/blue rotations.
-        { route_id: '7',   route_short_name: '7',   route_long_name: 'BusB1', route_type: 3, route_color: '#002FFF' },
-        { route_id: '8',   route_short_name: '8',   route_long_name: 'BusB2', route_type: 3, route_color: '#0D00FF' },
-        { route_id: '9',   route_short_name: '9',   route_long_name: 'BusB3', route_type: 3, route_color: '#1500FF' },
+        { route_id: '7', route_short_name: '7', route_long_name: 'BusB1', route_type: 3, route_color: '#002FFF' },
+        { route_id: '8', route_short_name: '8', route_long_name: 'BusB2', route_type: 3, route_color: '#0D00FF' },
+        { route_id: '9', route_short_name: '9', route_long_name: 'BusB3', route_type: 3, route_color: '#1500FF' },
       ],
     };
     const { routes } = reconcileRoutes({ seed: seedOf([]), tranzy, warnings: [] });
@@ -268,9 +266,16 @@ describe('reconcileRoutes — route_text_color is uniformly white', () => {
     // modal-substitution rule produces.
     const tranzy = {
       routes: [
-        { route_id: '60', route_short_name: '60', route_long_name: 'Dark',  route_type: 3, route_color: '000' },
+        { route_id: '60', route_short_name: '60', route_long_name: 'Dark', route_type: 3, route_color: '000' },
         { route_id: '61', route_short_name: '61', route_long_name: 'Light', route_type: 3, route_color: 'FFEE88' },
-        { route_id: '62', route_short_name: '62', route_long_name: 'WithText', route_type: 3, route_color: '#F3513C', route_text_color: 'ABCDEF' as any },
+        {
+          route_id: '62',
+          route_short_name: '62',
+          route_long_name: 'WithText',
+          route_type: 3,
+          route_color: '#F3513C',
+          route_text_color: 'ABCDEF' as any,
+        },
       ],
     };
     const { routes } = reconcileRoutes({ seed: seedOf([]), tranzy, warnings: [] });
@@ -279,7 +284,7 @@ describe('reconcileRoutes — route_text_color is uniformly white', () => {
     }
   });
 
-  it("ignores any Transitous-supplied route_text_color (uniform white wins)", () => {
+  it('ignores any Transitous-supplied route_text_color (uniform white wins)', () => {
     const seed = seedOf([
       { routeId: '99', shortName: '99', longName: 'Shared', type: '3', color: 'D24CAE', textColor: 'EEEEEE' },
     ]);

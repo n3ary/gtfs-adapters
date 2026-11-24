@@ -25,8 +25,8 @@ import { CalendarRowSchema, serializeRows } from '@n3ary/gtfs-spec/spec';
 
 const SERVICE_WEEKDAYS = {
   LV: { mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 },
-  S:  { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 1, sun: 0 },
-  D:  { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun: 1 },
+  S: { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 1, sun: 0 },
+  D: { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun: 1 },
   LD: { mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 },
 };
 

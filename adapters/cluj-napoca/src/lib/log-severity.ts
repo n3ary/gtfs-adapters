@@ -102,9 +102,11 @@ export function severityOf(warning) {
 export function formatWarningLine(warning) {
   const tag = warning.severity.toUpperCase().padEnd(5);
   const color =
-    warning.severity === SEVERITY.INFO ? COLORS.green :
-    warning.severity === SEVERITY.ERROR ? COLORS.red :
-    COLORS.yellow;
+    warning.severity === SEVERITY.INFO
+      ? COLORS.green
+      : warning.severity === SEVERITY.ERROR
+        ? COLORS.red
+        : COLORS.yellow;
   return `${color}[${tag}]${COLORS.reset} ${warning.message}`;
 }
 
@@ -123,12 +125,16 @@ export function emitGroupedWarnings(warnings) {
     bucket.push(w);
   }
   if (groups.info.length > 0) {
-    console.log(GHA.groupOpen(`\x1b[32mINFO\x1b[0m: ${groups.info.length} reconcile note(s) — data resolved successfully`));
+    console.log(
+      GHA.groupOpen(`\x1b[32mINFO\x1b[0m: ${groups.info.length} reconcile note(s) — data resolved successfully`),
+    );
     for (const w of groups.info) console.log(`  ${formatWarningLine(w)}`);
     console.log(GHA.groupClose());
   }
   if (groups.warn.length > 0) {
-    console.log(GHA.groupOpen(`\x1b[33mWARN\x1b[0m: ${groups.warn.length} data-loss signal(s) — review before merging`));
+    console.log(
+      GHA.groupOpen(`\x1b[33mWARN\x1b[0m: ${groups.warn.length} data-loss signal(s) — review before merging`),
+    );
     for (const w of groups.warn) console.log(`  ${formatWarningLine(w)}`);
     console.log(GHA.groupClose());
   }

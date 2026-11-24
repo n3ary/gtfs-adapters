@@ -1,6 +1,6 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 
-import { type RouteRow } from '@n3ary/gtfs-spec/spec';
+import type { RouteRow } from '@n3ary/gtfs-spec/spec';
 
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity (tsc check, tsx run).
 /**
@@ -198,17 +198,23 @@ export function reconcileTranzyFallback({
   }
 
   if (routesWithFallback > 0) {
-    warnings.push(info(
-      `routes: ${routesWithFallback} routes using Tranzy /trips fallback ` +
-      `(no CSV coverage — times empty, timepoint=0, ${tripsEmitted} trips emitted, ` +
-      `service_ids=${serviceIds.join('+')})`,
-    ));
+    warnings.push(
+      info(
+        `routes: ${routesWithFallback} routes using Tranzy /trips fallback ` +
+          `(no CSV coverage — times empty, timepoint=0, ${tripsEmitted} trips emitted, ` +
+          `service_ids=${serviceIds.join('+')})`,
+      ),
+    );
   }
   if (tripsSkippedNoStops > 0) {
     warnings.push(warnMsg(`Tranzy fallback: ${tripsSkippedNoStops} trips skipped (no stop_times in Tranzy)`));
   }
   if (tripsSkippedInvalidStops > 0) {
-    warnings.push(warnMsg(`Tranzy fallback: ${tripsSkippedInvalidStops} trips skipped (all stops missing from reconciled stops.txt)`));
+    warnings.push(
+      warnMsg(
+        `Tranzy fallback: ${tripsSkippedInvalidStops} trips skipped (all stops missing from reconciled stops.txt)`,
+      ),
+    );
   }
 
   return { tripRows, stopTimeRows };
@@ -220,7 +226,10 @@ function normalizeStopTimes(input) {
   if (!input) return out;
   if (input instanceof Map) {
     for (const [tripId, stops] of input.entries()) {
-      out.set(tripId, stops.slice().sort((a, b) => (a.sequence ?? a.stop_sequence ?? 0) - (b.sequence ?? b.stop_sequence ?? 0)));
+      out.set(
+        tripId,
+        stops.slice().sort((a, b) => (a.sequence ?? a.stop_sequence ?? 0) - (b.sequence ?? b.stop_sequence ?? 0)),
+      );
     }
     return out;
   }

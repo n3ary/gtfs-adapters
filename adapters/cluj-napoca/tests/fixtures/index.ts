@@ -147,8 +147,8 @@ const TRANZY = {
     { trip_id: 'tranzy-M26-back', stop_id: 'D', stop_sequence: 1 },
   ],
   shapes: [
-    { shape_id: '92_1', shape_pt_lat: 46.7850, shape_pt_lon: 23.6280, shape_pt_sequence: 1, shape_dist_traveled: 0 },
-    { shape_id: '92_1', shape_pt_lat: 46.7800, shape_pt_lon: 23.6200, shape_pt_sequence: 2, shape_dist_traveled: 500 },
+    { shape_id: '92_1', shape_pt_lat: 46.785, shape_pt_lon: 23.628, shape_pt_sequence: 1, shape_dist_traveled: 0 },
+    { shape_id: '92_1', shape_pt_lat: 46.78, shape_pt_lon: 23.62, shape_pt_sequence: 2, shape_dist_traveled: 500 },
   ],
   calendar: [],
 };

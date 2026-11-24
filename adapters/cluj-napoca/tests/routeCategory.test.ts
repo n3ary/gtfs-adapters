@@ -1,18 +1,18 @@
 // @ts-nocheck - full typing is a follow-up; this file was converted to .ts for tooling parity.
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
-  TAGS,
-  NETWORKS,
-  classifyRoute,
-  classifyNetwork,
-  cleanLongName,
-  cleanDesc,
-  deriveLongNameFromStops,
   applyRouteCategory,
+  classifyNetwork,
+  classifyRoute,
+  cleanDesc,
+  cleanLongName,
+  deriveLongNameFromStops,
   getAllCategories,
-  getAllTags,
   getAllNetworks,
+  getAllTags,
+  NETWORKS,
+  TAGS,
 } from '../src/assemble/merge/routeCategory.ts';
 
 describe('classifyRoute -- tag-surface pattern -> category', () => {
@@ -26,14 +26,14 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
     // designation lives in route_networks.txt + (via the empty-desc
     // fallback) route_desc.
     expect(classifyRoute({ route_short_name: 'TE1', route_long_name: 'Transport Elevi Manastur' })).toEqual([]);
-    expect(classifyNetwork({ route_short_name: 'TE1', route_long_name: 'Transport Elevi Manastur' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyNetwork({ route_short_name: 'TE1', route_long_name: 'Transport Elevi Manastur' })).toEqual({
+      id: 'school',
+      label: 'Transport Elevi',
+    });
     expect(classifyRoute({ route_short_name: 'TE14' })).toEqual([]);
-    expect(classifyNetwork({ route_short_name: 'TE14' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyNetwork({ route_short_name: 'TE14' })).toEqual({ id: 'school', label: 'Transport Elevi' });
     expect(classifyRoute({ route_short_name: 'TE-OG' })).toEqual([]);
-    expect(classifyNetwork({ route_short_name: 'TE-OG' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyNetwork({ route_short_name: 'TE-OG' })).toEqual({ id: 'school', label: 'Transport Elevi' });
   });
 
   it('classifies M7x routes as school network + metroline tag (broad school match)', () => {
@@ -46,40 +46,47 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
       route_long_name: 'TE2 Floresti str. Somesului',
     });
     expect(r1).toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' }]);
-    expect(classifyNetwork({
-      route_short_name: 'M76A',
-      route_long_name: 'TE2 Floresti str. Somesului',
-    })).toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(
+      classifyNetwork({
+        route_short_name: 'M76A',
+        route_long_name: 'TE2 Floresti str. Somesului',
+      }),
+    ).toEqual({ id: 'school', label: 'Transport Elevi' });
 
     const r2 = classifyRoute({
       route_short_name: 'M75B',
       route_long_name: 'TE1F',
     });
     expect(r2).toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' }]);
-    expect(classifyNetwork({
-      route_short_name: 'M75B',
-      route_long_name: 'TE1F',
-    })).toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(
+      classifyNetwork({
+        route_short_name: 'M75B',
+        route_long_name: 'TE1F',
+      }),
+    ).toEqual({ id: 'school', label: 'Transport Elevi' });
   });
 
   it('catches "Elevi" substring case-insensitively across all 3 fields (broad school match)', () => {
     // School is a network, not a tag. The broad school match catches
     // "elevi" in any of the three fields. classifyRoute returns tags
     // only -- the school network is verified via classifyNetwork.
-    expect(classifyRoute({ route_short_name: 'X1', route_long_name: 'Some elevi variant' }))
-      .toEqual([]);
-    expect(classifyNetwork({ route_short_name: 'X1', route_long_name: 'Some elevi variant' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyRoute({ route_short_name: 'X1', route_long_name: 'Some elevi variant' })).toEqual([]);
+    expect(classifyNetwork({ route_short_name: 'X1', route_long_name: 'Some elevi variant' })).toEqual({
+      id: 'school',
+      label: 'Transport Elevi',
+    });
 
-    expect(classifyRoute({ route_short_name: 'X2', route_long_name: '', route_desc: 'Elevi route' }))
-      .toEqual([]);
-    expect(classifyNetwork({ route_short_name: 'X2', route_long_name: '', route_desc: 'Elevi route' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyRoute({ route_short_name: 'X2', route_long_name: '', route_desc: 'Elevi route' })).toEqual([]);
+    expect(classifyNetwork({ route_short_name: 'X2', route_long_name: '', route_desc: 'Elevi route' })).toEqual({
+      id: 'school',
+      label: 'Transport Elevi',
+    });
 
-    expect(classifyRoute({ route_short_name: 'ELEVI-99', route_long_name: '' }))
-      .toEqual([]);
-    expect(classifyNetwork({ route_short_name: 'ELEVI-99', route_long_name: '' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyRoute({ route_short_name: 'ELEVI-99', route_long_name: '' })).toEqual([]);
+    expect(classifyNetwork({ route_short_name: 'ELEVI-99', route_long_name: '' })).toEqual({
+      id: 'school',
+      label: 'Transport Elevi',
+    });
   });
 
   it('classifies X1 (elevi in long_name + untold in desc) as school + festival (1 network + 1 tag)', () => {
@@ -95,48 +102,61 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
     // Only festival is a tag; school is a network.
     expect(result).toEqual([{ id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' }]);
     // School is a network classification.
-    expect(classifyNetwork({
-      route_short_name: 'X1',
-      route_long_name: 'Str. X - Liceul Y (Transport Elevi)',
-      route_desc: 'Untold',
-    })).toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(
+      classifyNetwork({
+        route_short_name: 'X1',
+        route_long_name: 'Str. X - Liceul Y (Transport Elevi)',
+        route_desc: 'Untold',
+      }),
+    ).toEqual({ id: 'school', label: 'Transport Elevi' });
   });
 
   it('classifies *U suffix + "(untold)" annotation as "Untold"', () => {
-    expect(classifyRoute({ route_short_name: '30U', route_long_name: 'Grigorescu - IRA' }))
-      .toEqual([{ id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' }]);
+    expect(classifyRoute({ route_short_name: '30U', route_long_name: 'Grigorescu - IRA' })).toEqual([
+      { id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' },
+    ]);
     // M26U is also metroline (M* prefix) -> 1:many. With the
     // reordered TAGS (everyday-first), metroline (priority 1)
     // comes before festival (priority 3).
-    expect(classifyRoute({
-      route_short_name: 'M26U',
-      route_long_name: 'Uzinei Electrice - Floresti / Cetate (untold)',
-    })).toEqual([
+    expect(
+      classifyRoute({
+        route_short_name: 'M26U',
+        route_long_name: 'Uzinei Electrice - Floresti / Cetate (untold)',
+      }),
+    ).toEqual([
       { id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' },
       { id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' },
     ]);
-    expect(classifyRoute({ route_short_name: '30U', route_long_name: 'Grigorescu - IRA Untold' }))
-      .toEqual([{ id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' }]);
-    expect(classifyRoute({ route_short_name: '99', route_long_name: '', route_desc: 'Untold festival' }))
-      .toEqual([{ id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' }]);
+    expect(classifyRoute({ route_short_name: '30U', route_long_name: 'Grigorescu - IRA Untold' })).toEqual([
+      { id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' },
+    ]);
+    expect(classifyRoute({ route_short_name: '99', route_long_name: '', route_desc: 'Untold festival' })).toEqual([
+      { id: 'festival', label: 'Untold', priority: 3, icon: 'music', color: '7B1FA2' },
+    ]);
   });
 
   it('classifies *N suffix + "Noapte" long_name as "Noapte"', () => {
-    expect(classifyRoute({ route_short_name: '25N', route_long_name: 'Str. Bucium - Str. Unirii' }))
-      .toEqual([{ id: 'night', label: 'Noapte', priority: 0, icon: 'moon', color: '1A1F36' }]);
-    expect(classifyRoute({ route_short_name: '5N', route_long_name: 'Noapte Traian Vuia' }))
-      .toEqual([{ id: 'night', label: 'Noapte', priority: 0, icon: 'moon', color: '1A1F36' }]);
-    expect(classifyRoute({ route_short_name: '99', route_long_name: '', route_desc: 'Noapte special' }))
-      .toEqual([{ id: 'night', label: 'Noapte', priority: 0, icon: 'moon', color: '1A1F36' }]);
+    expect(classifyRoute({ route_short_name: '25N', route_long_name: 'Str. Bucium - Str. Unirii' })).toEqual([
+      { id: 'night', label: 'Noapte', priority: 0, icon: 'moon', color: '1A1F36' },
+    ]);
+    expect(classifyRoute({ route_short_name: '5N', route_long_name: 'Noapte Traian Vuia' })).toEqual([
+      { id: 'night', label: 'Noapte', priority: 0, icon: 'moon', color: '1A1F36' },
+    ]);
+    expect(classifyRoute({ route_short_name: '99', route_long_name: '', route_desc: 'Noapte special' })).toEqual([
+      { id: 'night', label: 'Noapte', priority: 0, icon: 'moon', color: '1A1F36' },
+    ]);
   });
 
   it('classifies A1 / Aeroport long_name as "Aeroport Expres"', () => {
-    expect(classifyRoute({ route_short_name: 'A1', route_long_name: 'Piata Mihai Viteazu - Aeroport' }))
-      .toEqual([{ id: 'airport', label: 'Aeroport Expres', priority: 2, icon: 'plane', color: '0EA5E9' }]);
-    expect(classifyRoute({ route_short_name: '99', route_long_name: 'Some Route Aeroport Expres' }))
-      .toEqual([{ id: 'airport', label: 'Aeroport Expres', priority: 2, icon: 'plane', color: '0EA5E9' }]);
-    expect(classifyRoute({ route_short_name: '99', route_long_name: '', route_desc: 'aeroport shuttle' }))
-      .toEqual([{ id: 'airport', label: 'Aeroport Expres', priority: 2, icon: 'plane', color: '0EA5E9' }]);
+    expect(classifyRoute({ route_short_name: 'A1', route_long_name: 'Piata Mihai Viteazu - Aeroport' })).toEqual([
+      { id: 'airport', label: 'Aeroport Expres', priority: 2, icon: 'plane', color: '0EA5E9' },
+    ]);
+    expect(classifyRoute({ route_short_name: '99', route_long_name: 'Some Route Aeroport Expres' })).toEqual([
+      { id: 'airport', label: 'Aeroport Expres', priority: 2, icon: 'plane', color: '0EA5E9' },
+    ]);
+    expect(classifyRoute({ route_short_name: '99', route_long_name: '', route_desc: 'aeroport shuttle' })).toEqual([
+      { id: 'airport', label: 'Aeroport Expres', priority: 2, icon: 'plane', color: '0EA5E9' },
+    ]);
   });
 
   it('does NOT classify D51 as commuter (D51 is employee-only / convention, not public commuter)', () => {
@@ -145,17 +165,21 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
   });
 
   it('classifies M* (non-school) as "Metropolitan"', () => {
-    expect(classifyRoute({ route_short_name: 'M11', route_long_name: 'P-ta Cipariu - Feleacu' }))
-      .toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' }]);
-    expect(classifyRoute({ route_short_name: 'M26', route_long_name: 'Floresti - Cluj Napoca' }))
-      .toEqual([{ id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' }]);
+    expect(classifyRoute({ route_short_name: 'M11', route_long_name: 'P-ta Cipariu - Feleacu' })).toEqual([
+      { id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' },
+    ]);
+    expect(classifyRoute({ route_short_name: 'M26', route_long_name: 'Floresti - Cluj Napoca' })).toEqual([
+      { id: 'metroline', label: 'Metropolitan', priority: 1, icon: 'map-pin', color: '2E7D5B' },
+    ]);
   });
 
   it('classifies CS as "Cursa Speciala"', () => {
-    expect(classifyRoute({ route_short_name: 'CS', route_long_name: 'CURSA SPECIALA' }))
-      .toEqual([{ id: 'special', label: 'Cursa Speciala', priority: 4, icon: 'zap', color: 'C2410C' }]);
-    expect(classifyRoute({ route_short_name: 'CS', route_long_name: '', route_desc: 'CURSA SPECIALA' }))
-      .toEqual([{ id: 'special', label: 'Cursa Speciala', priority: 4, icon: 'zap', color: 'C2410C' }]);
+    expect(classifyRoute({ route_short_name: 'CS', route_long_name: 'CURSA SPECIALA' })).toEqual([
+      { id: 'special', label: 'Cursa Speciala', priority: 4, icon: 'zap', color: 'C2410C' },
+    ]);
+    expect(classifyRoute({ route_short_name: 'CS', route_long_name: '', route_desc: 'CURSA SPECIALA' })).toEqual([
+      { id: 'special', label: 'Cursa Speciala', priority: 4, icon: 'zap', color: 'C2410C' },
+    ]);
   });
 
   it('returns 1:many tag list for routes that match multiple tags (festival + metroline)', () => {
@@ -178,14 +202,13 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
   it('returns empty array for regular urban routes that match no tag AND no school network', () => {
     // Regular urban: no tag, no school network match. classifyRoute
     // returns []. classifyNetwork returns normal.
-    expect(classifyRoute({ route_short_name: '1', route_long_name: 'Str. Bucium - P-ta 1 Mai' }))
-      .toEqual([]);
-    expect(classifyNetwork({ route_short_name: '1', route_long_name: 'Str. Bucium - P-ta 1 Mai' }))
-      .toEqual({ id: 'normal', label: 'Normal' });
-    expect(classifyRoute({ route_short_name: '24', route_long_name: 'Str. Unirii - Str. Bucium' }))
-      .toEqual([]);
-    expect(classifyRoute({ route_short_name: '101', route_long_name: 'Tram line 101' }))
-      .toEqual([]);
+    expect(classifyRoute({ route_short_name: '1', route_long_name: 'Str. Bucium - P-ta 1 Mai' })).toEqual([]);
+    expect(classifyNetwork({ route_short_name: '1', route_long_name: 'Str. Bucium - P-ta 1 Mai' })).toEqual({
+      id: 'normal',
+      label: 'Normal',
+    });
+    expect(classifyRoute({ route_short_name: '24', route_long_name: 'Str. Unirii - Str. Bucium' })).toEqual([]);
+    expect(classifyRoute({ route_short_name: '101', route_long_name: 'Tram line 101' })).toEqual([]);
   });
 
   it('respects priority order (matches in TAGS declaration order)', () => {
@@ -229,11 +252,14 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
       special: 'zap',
     };
     const inputs: Array<{ tag: string; row: Parameters<typeof classifyRoute>[0] }> = [
-      { tag: 'special',  row: { route_short_name: 'CS', route_long_name: 'Cursa speciala X', route_desc: '' } },
-      { tag: 'festival', row: { route_short_name: '30U', route_long_name: 'Floresti - Centru (untold)', route_desc: '' } },
-      { tag: 'night',    row: { route_short_name: '25N', route_long_name: 'str. X - str. Y (noapte)', route_desc: '' } },
-      { tag: 'airport',  row: { route_short_name: 'A5',  route_long_name: 'Piata Garii - Aeroport',     route_desc: '' } },
-      { tag: 'metroline',row: { route_short_name: 'M26', route_long_name: 'M26 Floresti - Centru',       route_desc: '' } },
+      { tag: 'special', row: { route_short_name: 'CS', route_long_name: 'Cursa speciala X', route_desc: '' } },
+      {
+        tag: 'festival',
+        row: { route_short_name: '30U', route_long_name: 'Floresti - Centru (untold)', route_desc: '' },
+      },
+      { tag: 'night', row: { route_short_name: '25N', route_long_name: 'str. X - str. Y (noapte)', route_desc: '' } },
+      { tag: 'airport', row: { route_short_name: 'A5', route_long_name: 'Piata Garii - Aeroport', route_desc: '' } },
+      { tag: 'metroline', row: { route_short_name: 'M26', route_long_name: 'M26 Floresti - Centru', route_desc: '' } },
     ];
     for (const { tag, row } of inputs) {
       const result = classifyRoute(row);
@@ -250,18 +276,21 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
     // ships). Hand-picked per tag (NOT derived from route modal
     // hue — tag color is brand identity, not aggregate signal).
     const expectedColors: Record<string, string> = {
-      night: '1A1F36',      // dark navy (TfL Night Bus Blue convention)
-      metroline: '2E7D5B',  // forest green (suburban/leafy convention)
-      airport: '0EA5E9',    // sky blue (aviation convention; lighter than night)
-      festival: '7B1FA2',   // deep magenta-purple (Untold brand)
-      special: 'C2410C',    // burnt orange (one-off accent)
+      night: '1A1F36', // dark navy (TfL Night Bus Blue convention)
+      metroline: '2E7D5B', // forest green (suburban/leafy convention)
+      airport: '0EA5E9', // sky blue (aviation convention; lighter than night)
+      festival: '7B1FA2', // deep magenta-purple (Untold brand)
+      special: 'C2410C', // burnt orange (one-off accent)
     };
     const inputs: Array<{ tag: string; row: Parameters<typeof classifyRoute>[0] }> = [
-      { tag: 'special',  row: { route_short_name: 'CS', route_long_name: 'Cursa speciala X', route_desc: '' } },
-      { tag: 'festival', row: { route_short_name: '30U', route_long_name: 'Floresti - Centru (untold)', route_desc: '' } },
-      { tag: 'night',    row: { route_short_name: '25N', route_long_name: 'str. X - str. Y (noapte)', route_desc: '' } },
-      { tag: 'airport',  row: { route_short_name: 'A5',  route_long_name: 'Piata Garii - Aeroport',     route_desc: '' } },
-      { tag: 'metroline',row: { route_short_name: 'M26', route_long_name: 'M26 Floresti - Centru',       route_desc: '' } },
+      { tag: 'special', row: { route_short_name: 'CS', route_long_name: 'Cursa speciala X', route_desc: '' } },
+      {
+        tag: 'festival',
+        row: { route_short_name: '30U', route_long_name: 'Floresti - Centru (untold)', route_desc: '' },
+      },
+      { tag: 'night', row: { route_short_name: '25N', route_long_name: 'str. X - str. Y (noapte)', route_desc: '' } },
+      { tag: 'airport', row: { route_short_name: 'A5', route_long_name: 'Piata Garii - Aeroport', route_desc: '' } },
+      { tag: 'metroline', row: { route_short_name: 'M26', route_long_name: 'M26 Floresti - Centru', route_desc: '' } },
     ];
     for (const { tag, row } of inputs) {
       const result = classifyRoute(row);
@@ -283,21 +312,24 @@ describe('classifyRoute -- tag-surface pattern -> category', () => {
     const expectedPriorities: Record<string, number> = {
       // TAG_INDEX values (position in `TAGS` array -- see
       // routeCategory.ts TAGS JSDoc). Networks are excluded.
-      night: 0,      // TAGS index 0
-      metroline: 1,  // TAGS index 1
-      airport: 2,    // TAGS index 2
-      festival: 3,   // TAGS index 3
-      special: 4,    // TAGS index 4
+      night: 0, // TAGS index 0
+      metroline: 1, // TAGS index 1
+      airport: 2, // TAGS index 2
+      festival: 3, // TAGS index 3
+      special: 4, // TAGS index 4
     };
     // For each tag, build a route that matches ONLY that tag and
     // assert the priority. The 1-tag-only inputs below are chosen
     // so they match exactly one predicate each.
     const inputs: Array<{ tag: string; row: Parameters<typeof classifyRoute>[0] }> = [
-      { tag: 'special',  row: { route_short_name: 'CS', route_long_name: 'Cursa speciala X', route_desc: '' } },
-      { tag: 'festival', row: { route_short_name: '30U', route_long_name: 'Floresti - Centru (untold)', route_desc: '' } },
-      { tag: 'night',    row: { route_short_name: '25N', route_long_name: 'str. X - str. Y (noapte)', route_desc: '' } },
-      { tag: 'airport',  row: { route_short_name: 'A5',  route_long_name: 'Piata Garii - Aeroport',     route_desc: '' } },
-      { tag: 'metroline',row: { route_short_name: 'M26', route_long_name: 'M26 Floresti - Centru',       route_desc: '' } },
+      { tag: 'special', row: { route_short_name: 'CS', route_long_name: 'Cursa speciala X', route_desc: '' } },
+      {
+        tag: 'festival',
+        row: { route_short_name: '30U', route_long_name: 'Floresti - Centru (untold)', route_desc: '' },
+      },
+      { tag: 'night', row: { route_short_name: '25N', route_long_name: 'str. X - str. Y (noapte)', route_desc: '' } },
+      { tag: 'airport', row: { route_short_name: 'A5', route_long_name: 'Piata Garii - Aeroport', route_desc: '' } },
+      { tag: 'metroline', row: { route_short_name: 'M26', route_long_name: 'M26 Floresti - Centru', route_desc: '' } },
     ];
     for (const { tag, row } of inputs) {
       const result = classifyRoute(row);
@@ -315,81 +347,97 @@ describe('classifyNetwork -- 1:1 network assignment', () => {
   // of the public GTFS spec is satisfied by construction.
 
   it('assigns school network to TE* short_name routes', () => {
-    expect(classifyNetwork({ route_short_name: 'TE1' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
-    expect(classifyNetwork({ route_short_name: 'TE14', route_long_name: 'whatever' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
-    expect(classifyNetwork({ route_short_name: 'TE-OG' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyNetwork({ route_short_name: 'TE1' })).toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyNetwork({ route_short_name: 'TE14', route_long_name: 'whatever' })).toEqual({
+      id: 'school',
+      label: 'Transport Elevi',
+    });
+    expect(classifyNetwork({ route_short_name: 'TE-OG' })).toEqual({ id: 'school', label: 'Transport Elevi' });
   });
 
   it('assigns school network to M7x family (TE* in long_name)', () => {
     // The M7x family has "TE\d+ Floresti" in long_name. With the
     // broad school match, they're school-network routes.
-    expect(classifyNetwork({ route_short_name: 'M76A', route_long_name: 'TE2 Floresti str. Somesului' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
-    expect(classifyNetwork({ route_short_name: 'M75B', route_long_name: 'TE1F' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyNetwork({ route_short_name: 'M76A', route_long_name: 'TE2 Floresti str. Somesului' })).toEqual({
+      id: 'school',
+      label: 'Transport Elevi',
+    });
+    expect(classifyNetwork({ route_short_name: 'M75B', route_long_name: 'TE1F' })).toEqual({
+      id: 'school',
+      label: 'Transport Elevi',
+    });
   });
 
   it('assigns school network via the elevi substring defensive catch', () => {
     // "elevi" in any of the 3 fields is a school-network hit.
-    expect(classifyNetwork({ route_short_name: 'X1', route_long_name: 'Some elevi variant' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
-    expect(classifyNetwork({ route_short_name: 'X2', route_long_name: '', route_desc: 'Elevi route' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
-    expect(classifyNetwork({ route_short_name: 'ELEVI-99', route_long_name: '' }))
-      .toEqual({ id: 'school', label: 'Transport Elevi' });
+    expect(classifyNetwork({ route_short_name: 'X1', route_long_name: 'Some elevi variant' })).toEqual({
+      id: 'school',
+      label: 'Transport Elevi',
+    });
+    expect(classifyNetwork({ route_short_name: 'X2', route_long_name: '', route_desc: 'Elevi route' })).toEqual({
+      id: 'school',
+      label: 'Transport Elevi',
+    });
+    expect(classifyNetwork({ route_short_name: 'ELEVI-99', route_long_name: '' })).toEqual({
+      id: 'school',
+      label: 'Transport Elevi',
+    });
   });
 
   it('assigns normal network to routes with no school signal', () => {
-    expect(classifyNetwork({ route_short_name: '1' }))
-      .toEqual({ id: 'normal', label: 'Normal' });
-    expect(classifyNetwork({ route_short_name: 'CS' }))
-      .toEqual({ id: 'normal', label: 'Normal' });
-    expect(classifyNetwork({ route_short_name: '25N' }))
-      .toEqual({ id: 'normal', label: 'Normal' });
-    expect(classifyNetwork({ route_short_name: 'A1' }))
-      .toEqual({ id: 'normal', label: 'Normal' });
+    expect(classifyNetwork({ route_short_name: '1' })).toEqual({ id: 'normal', label: 'Normal' });
+    expect(classifyNetwork({ route_short_name: 'CS' })).toEqual({ id: 'normal', label: 'Normal' });
+    expect(classifyNetwork({ route_short_name: '25N' })).toEqual({ id: 'normal', label: 'Normal' });
+    expect(classifyNetwork({ route_short_name: 'A1' })).toEqual({ id: 'normal', label: 'Normal' });
     // M26 (no TE prefix, no elevi) is normal network.
-    expect(classifyNetwork({ route_short_name: 'M26', route_long_name: 'Gara - Selimbar' }))
-      .toEqual({ id: 'normal', label: 'Normal' });
+    expect(classifyNetwork({ route_short_name: 'M26', route_long_name: 'Gara - Selimbar' })).toEqual({
+      id: 'normal',
+      label: 'Normal',
+    });
   });
 
   it('treats missing/undefined fields as empty strings (falls back to normal)', () => {
     expect(classifyNetwork({})).toEqual({ id: 'normal', label: 'Normal' });
-    expect(classifyNetwork({ route_short_name: undefined, route_long_name: 'foo' }))
-      .toEqual({ id: 'normal', label: 'Normal' });
+    expect(classifyNetwork({ route_short_name: undefined, route_long_name: 'foo' })).toEqual({
+      id: 'normal',
+      label: 'Normal',
+    });
   });
 });
 
 describe('cleanLongName -- start-end format', () => {
   it('strips trailing parenthetical annotations', () => {
-    expect(cleanLongName({ route_short_name: 'M26U', route_long_name: 'Uzinei Electrice - Floresti / Cetate (untold)' }))
-      .toBe('Uzinei Electrice - Floresti / Cetate');
-    expect(cleanLongName({ route_short_name: '88A', route_long_name: 'Floresti Cetate - Emerson (traseu M21)' }))
-      .toBe('Floresti Cetate - Emerson');
-    expect(cleanLongName({ route_short_name: 'M26N', route_long_name: 'Floresti - Cluj Napoca' }))
-      .toBe('Floresti - Cluj Napoca');
+    expect(
+      cleanLongName({ route_short_name: 'M26U', route_long_name: 'Uzinei Electrice - Floresti / Cetate (untold)' }),
+    ).toBe('Uzinei Electrice - Floresti / Cetate');
+    expect(cleanLongName({ route_short_name: '88A', route_long_name: 'Floresti Cetate - Emerson (traseu M21)' })).toBe(
+      'Floresti Cetate - Emerson',
+    );
+    expect(cleanLongName({ route_short_name: 'M26N', route_long_name: 'Floresti - Cluj Napoca' })).toBe(
+      'Floresti - Cluj Napoca',
+    );
   });
 
   it('strips "Transport Elevi -" / "Transport Elevi " prefix for school routes', () => {
-    expect(cleanLongName({ route_short_name: 'TE1', route_long_name: 'Transport Elevi Manastur' }))
-      .toBe('Manastur');
-    expect(cleanLongName({ route_short_name: 'TE6', route_long_name: 'Transport Elevi-Manastur - Kogalniceanu' }))
-      .toBe('Manastur - Kogalniceanu');
-    expect(cleanLongName({ route_short_name: 'TE7', route_long_name: 'Transport Elevi-Bucium - Kogalniceanu' }))
-      .toBe('Bucium - Kogalniceanu');
+    expect(cleanLongName({ route_short_name: 'TE1', route_long_name: 'Transport Elevi Manastur' })).toBe('Manastur');
+    expect(cleanLongName({ route_short_name: 'TE6', route_long_name: 'Transport Elevi-Manastur - Kogalniceanu' })).toBe(
+      'Manastur - Kogalniceanu',
+    );
+    expect(cleanLongName({ route_short_name: 'TE7', route_long_name: 'Transport Elevi-Bucium - Kogalniceanu' })).toBe(
+      'Bucium - Kogalniceanu',
+    );
   });
 
   it('strips "TE\\d+ Floresti" prefix from M7x school routes', () => {
     // Kept even though those routes are now in the school network
     // (broad match). The cleanup pass still strips the Tranzy noise
     // from long_name for readability.
-    expect(cleanLongName({ route_short_name: 'M76A', route_long_name: 'TE2 Floresti str. Somesului' }))
-      .toBe('str. Somesului');
-    expect(cleanLongName({ route_short_name: 'M79A', route_long_name: 'TE5 Floresti Tauti Floresti' }))
-      .toBe('Tauti Floresti');
+    expect(cleanLongName({ route_short_name: 'M76A', route_long_name: 'TE2 Floresti str. Somesului' })).toBe(
+      'str. Somesului',
+    );
+    expect(cleanLongName({ route_short_name: 'M79A', route_long_name: 'TE5 Floresti Tauti Floresti' })).toBe(
+      'Tauti Floresti',
+    );
   });
 
   it('clears long_name for CS (no fixed endpoints to describe)', () => {
@@ -397,10 +445,12 @@ describe('cleanLongName -- start-end format', () => {
   });
 
   it('returns start-end unchanged when already clean', () => {
-    expect(cleanLongName({ route_short_name: '1', route_long_name: 'Str. Bucium - P-ta 1 Mai' }))
-      .toBe('Str. Bucium - P-ta 1 Mai');
-    expect(cleanLongName({ route_short_name: '25', route_long_name: 'Str. Bucium - Str. Unirii' }))
-      .toBe('Str. Bucium - Str. Unirii');
+    expect(cleanLongName({ route_short_name: '1', route_long_name: 'Str. Bucium - P-ta 1 Mai' })).toBe(
+      'Str. Bucium - P-ta 1 Mai',
+    );
+    expect(cleanLongName({ route_short_name: '25', route_long_name: 'Str. Bucium - Str. Unirii' })).toBe(
+      'Str. Bucium - Str. Unirii',
+    );
   });
 
   it('handles empty/undefined long_name gracefully', () => {
@@ -409,8 +459,9 @@ describe('cleanLongName -- start-end format', () => {
   });
 
   it('trims whitespace', () => {
-    expect(cleanLongName({ route_short_name: '1', route_long_name: '  Str. Bucium - P-ta 1 Mai  ' }))
-      .toBe('Str. Bucium - P-ta 1 Mai');
+    expect(cleanLongName({ route_short_name: '1', route_long_name: '  Str. Bucium - P-ta 1 Mai  ' })).toBe(
+      'Str. Bucium - P-ta 1 Mai',
+    );
   });
 });
 
@@ -433,18 +484,31 @@ describe('deriveLongNameFromStops -- fallback when cleanup leaves long_name empt
       { trip_id: 'long', stop_id: 'B', stop_sequence: 1 },
       { trip_id: 'long', stop_id: 'C', stop_sequence: 2 },
     ];
-    const tripToRoute = new Map([['short', '35'], ['long', '35']]);
-    expect(deriveLongNameFromStops({
-      routeId: '35', allStopTimeRows, tripToRoute, stopsByStopId,
-    })).toBe('Piata Garii - Cart. Zorilor');
+    const tripToRoute = new Map([
+      ['short', '35'],
+      ['long', '35'],
+    ]);
+    expect(
+      deriveLongNameFromStops({
+        routeId: '35',
+        allStopTimeRows,
+        tripToRoute,
+        stopsByStopId,
+      }),
+    ).toBe('Piata Garii - Cart. Zorilor');
   });
 
   it('returns "" when no stop_times exist for the route', () => {
     const allStopTimeRows = [{ trip_id: 't1', stop_id: 'A', stop_sequence: 0 }];
     const tripToRoute = new Map([['t1', 'OTHER']]);
-    expect(deriveLongNameFromStops({
-      routeId: '35', allStopTimeRows, tripToRoute, stopsByStopId,
-    })).toBe('');
+    expect(
+      deriveLongNameFromStops({
+        routeId: '35',
+        allStopTimeRows,
+        tripToRoute,
+        stopsByStopId,
+      }),
+    ).toBe('');
   });
 
   it('returns "" when first/last stop ids do not resolve to names', () => {
@@ -453,9 +517,14 @@ describe('deriveLongNameFromStops -- fallback when cleanup leaves long_name empt
       { trip_id: 't1', stop_id: 'UNKNOWN2', stop_sequence: 1 },
     ];
     const tripToRoute = new Map([['t1', '35']]);
-    expect(deriveLongNameFromStops({
-      routeId: '35', allStopTimeRows, tripToRoute, stopsByStopId,
-    })).toBe('');
+    expect(
+      deriveLongNameFromStops({
+        routeId: '35',
+        allStopTimeRows,
+        tripToRoute,
+        stopsByStopId,
+      }),
+    ).toBe('');
   });
 
   it('returns "" for circular services (first stop == last stop)', () => {
@@ -464,19 +533,27 @@ describe('deriveLongNameFromStops -- fallback when cleanup leaves long_name empt
       { trip_id: 't1', stop_id: 'Z', stop_sequence: 1 },
     ];
     const tripToRoute = new Map([['t1', 'CIRC']]);
-    expect(deriveLongNameFromStops({
-      routeId: 'CIRC', allStopTimeRows, tripToRoute, stopsByStopId,
-    })).toBe('');
+    expect(
+      deriveLongNameFromStops({
+        routeId: 'CIRC',
+        allStopTimeRows,
+        tripToRoute,
+        stopsByStopId,
+      }),
+    ).toBe('');
   });
 
   it('returns "" for single-stop trips (no start/end to extract)', () => {
-    const allStopTimeRows = [
-      { trip_id: 't1', stop_id: 'A', stop_sequence: 0 },
-    ];
+    const allStopTimeRows = [{ trip_id: 't1', stop_id: 'A', stop_sequence: 0 }];
     const tripToRoute = new Map([['t1', '35']]);
-    expect(deriveLongNameFromStops({
-      routeId: '35', allStopTimeRows, tripToRoute, stopsByStopId,
-    })).toBe('');
+    expect(
+      deriveLongNameFromStops({
+        routeId: '35',
+        allStopTimeRows,
+        tripToRoute,
+        stopsByStopId,
+      }),
+    ).toBe('');
   });
 
   it('returns "" when inputs are missing (defensive)', () => {
@@ -486,15 +563,16 @@ describe('deriveLongNameFromStops -- fallback when cleanup leaves long_name empt
 
 describe('cleanDesc -- symmetric cleanup with cleanLongName', () => {
   it('strips the same parentheticals cleanLongName does', () => {
-    expect(cleanDesc({ route_short_name: '88A', route_desc: 'Floresti Cetate - Emerson (traseu M21)' }))
-      .toBe('Floresti Cetate - Emerson');
-    expect(cleanDesc({ route_short_name: 'M26U', route_desc: 'Uzinei Electrice - Floresti / Cetate (untold)' }))
-      .toBe('Uzinei Electrice - Floresti / Cetate');
+    expect(cleanDesc({ route_short_name: '88A', route_desc: 'Floresti Cetate - Emerson (traseu M21)' })).toBe(
+      'Floresti Cetate - Emerson',
+    );
+    expect(cleanDesc({ route_short_name: 'M26U', route_desc: 'Uzinei Electrice - Floresti / Cetate (untold)' })).toBe(
+      'Uzinei Electrice - Floresti / Cetate',
+    );
   });
 
   it('strips "Transport Elevi -" / "Transport Elevi " prefix', () => {
-    expect(cleanDesc({ route_short_name: 'TE1', route_desc: 'Transport Elevi Manastur' }))
-      .toBe('Manastur');
+    expect(cleanDesc({ route_short_name: 'TE1', route_desc: 'Transport Elevi Manastur' })).toBe('Manastur');
   });
 
   it('clears desc for CS (matches cleanLongName behavior)', () => {
@@ -510,8 +588,9 @@ describe('cleanDesc -- symmetric cleanup with cleanLongName', () => {
     // D51's desc from Tranzy is " P-ta Mihai Viteazu - Gilau" -- already
     // clean. The cleanup pass leaves it intact so the orchestrator
     // can use it as route_desc when no classification overwrites it.
-    expect(cleanDesc({ route_short_name: 'D51', route_desc: ' P-ta Mihai Viteazu - Gilau' }))
-      .toBe('P-ta Mihai Viteazu - Gilau');
+    expect(cleanDesc({ route_short_name: 'D51', route_desc: ' P-ta Mihai Viteazu - Gilau' })).toBe(
+      'P-ta Mihai Viteazu - Gilau',
+    );
   });
 });
 
@@ -527,13 +606,16 @@ describe('applyRouteCategory -- orchestrator entry point', () => {
       { trip_id: 't-93', stop_id: 'A', stop_sequence: 0 },
       { trip_id: 't-93', stop_id: 'B', stop_sequence: 1 },
       { trip_id: 't-93', stop_id: 'C', stop_sequence: 2 },
-      { trip_id: 't-1',  stop_id: 'A', stop_sequence: 0 },
-      { trip_id: 't-1',  stop_id: 'C', stop_sequence: 1 },
+      { trip_id: 't-1', stop_id: 'A', stop_sequence: 0 },
+      { trip_id: 't-1', stop_id: 'C', stop_sequence: 1 },
     ];
-    const tripToRoute = new Map([['t-93', '93'], ['t-1', '1']]);
+    const tripToRoute = new Map([
+      ['t-93', '93'],
+      ['t-1', '1'],
+    ]);
     const routes = [
       { route_id: '93', route_short_name: 'TE1', route_long_name: 'Transport Elevi Manastur', route_desc: '' },
-      { route_id: '1',  route_short_name: '1',  route_long_name: 'Str. Bucium - P-ta 1 Mai',   route_desc: '' },
+      { route_id: '1', route_short_name: '1', route_long_name: 'Str. Bucium - P-ta 1 Mai', route_desc: '' },
       { route_id: '99', route_short_name: '99', route_long_name: '', route_desc: '' },
     ];
     return { routes, allStopTimeRows, tripToRoute };
@@ -552,7 +634,11 @@ describe('applyRouteCategory -- orchestrator entry point', () => {
     const { routes, allStopTimeRows, tripToRoute } = setup();
     const warnings = [];
     const result = applyRouteCategory({
-      routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings,
+      routes,
+      allStopTimeRows,
+      tripToRoute,
+      stopsByStopId,
+      warnings,
     });
     expect(result.classifiedCount).toBe(0); // no route is tagged
     expect(result.multiTagCount).toBe(0);
@@ -594,7 +680,11 @@ describe('applyRouteCategory -- orchestrator entry point', () => {
     ];
     const warnings = [];
     const result = applyRouteCategory({
-      routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings,
+      routes,
+      allStopTimeRows,
+      tripToRoute,
+      stopsByStopId,
+      warnings,
     });
     expect(result.classifiedCount).toBe(1); // 1 route tagged
     expect(result.multiTagCount).toBe(1); // with 2 tags
@@ -612,12 +702,14 @@ describe('applyRouteCategory -- orchestrator entry point', () => {
       { trip_id: 't-99', stop_id: 'C', stop_sequence: 2 },
     ];
     const tripToRoute = new Map([['t-99', '99']]);
-    const routes = [
-      { route_id: '99', route_short_name: '99', route_long_name: '', route_desc: '' },
-    ];
+    const routes = [{ route_id: '99', route_short_name: '99', route_long_name: '', route_desc: '' }];
     const warnings = [];
     const result = applyRouteCategory({
-      routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings,
+      routes,
+      allStopTimeRows,
+      tripToRoute,
+      stopsByStopId,
+      warnings,
     });
     expect(result.longNameDerivedCount).toBe(1);
     expect(result.longNameUnresolvedCount).toBe(0);
@@ -631,24 +723,28 @@ describe('applyRouteCategory -- orchestrator entry point', () => {
       { trip_id: 't-99', stop_id: 'C', stop_sequence: 2 },
     ];
     const tripToRoute = new Map([['t-99', '99']]);
-    const routes = [
-      { route_id: '99', route_short_name: '99', route_long_name: '', route_desc: '' },
-    ];
+    const routes = [{ route_id: '99', route_short_name: '99', route_long_name: '', route_desc: '' }];
     const warnings = [];
     const result = applyRouteCategory({
-      routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings,
+      routes,
+      allStopTimeRows,
+      tripToRoute,
+      stopsByStopId,
+      warnings,
     });
     expect(result.longNameDerivedCount).toBe(1);
     expect(routes[0].route_long_name).toBe('Piata Garii - Cart. Zorilor');
   });
 
   it('counts unresolved routes (empty long_name AND no stop_times fallback)', () => {
-    const routes = [
-      { route_id: '99', route_short_name: '99', route_long_name: '', route_desc: '' },
-    ];
+    const routes = [{ route_id: '99', route_short_name: '99', route_long_name: '', route_desc: '' }];
     const warnings = [];
     const result = applyRouteCategory({
-      routes, allStopTimeRows: [], tripToRoute: new Map(), stopsByStopId, warnings,
+      routes,
+      allStopTimeRows: [],
+      tripToRoute: new Map(),
+      stopsByStopId,
+      warnings,
     });
     expect(result.longNameUnresolvedCount).toBe(1);
     expect(routes[0].route_long_name).toBe('');
@@ -662,7 +758,11 @@ describe('applyRouteCategory -- orchestrator entry point', () => {
     const { routes, allStopTimeRows, tripToRoute } = setup();
     const warnings = [];
     applyRouteCategory({
-      routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings,
+      routes,
+      allStopTimeRows,
+      tripToRoute,
+      stopsByStopId,
+      warnings,
     });
     const info = warnings.find((w) => w.severity === 'info' && w.message.startsWith('routes:'));
     expect(info).toBeDefined();
@@ -677,12 +777,26 @@ describe('applyRouteCategory -- orchestrator entry point', () => {
     const allStopTimeRows = [];
     const tripToRoute = new Map();
     const routes = [
-      { route_id: '145', route_short_name: 'M26U', route_long_name: 'Some Endpoint - Liceul X (untold)', route_desc: '' },
-      { route_id: '146', route_short_name: 'M99U', route_long_name: 'Other Endpoint - Scoala Y (untold)', route_desc: '' },
+      {
+        route_id: '145',
+        route_short_name: 'M26U',
+        route_long_name: 'Some Endpoint - Liceul X (untold)',
+        route_desc: '',
+      },
+      {
+        route_id: '146',
+        route_short_name: 'M99U',
+        route_long_name: 'Other Endpoint - Scoala Y (untold)',
+        route_desc: '',
+      },
     ];
     const warnings = [];
     applyRouteCategory({
-      routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings,
+      routes,
+      allStopTimeRows,
+      tripToRoute,
+      stopsByStopId,
+      warnings,
     });
     const info = warnings.find((w) => w.severity === 'info' && w.message.startsWith('routes:'));
     expect(info.message).toMatch(/2 with multiple tags/);
@@ -691,12 +805,14 @@ describe('applyRouteCategory -- orchestrator entry point', () => {
   it('does not emit a warning when nothing changes', () => {
     const allStopTimeRows = [{ trip_id: 't-1', stop_id: 'A', stop_sequence: 0 }];
     const tripToRoute = new Map([['t-1', '1']]);
-    const routes = [
-      { route_id: '1', route_short_name: '1', route_long_name: 'A - B', route_desc: '' },
-    ];
+    const routes = [{ route_id: '1', route_short_name: '1', route_long_name: 'A - B', route_desc: '' }];
     const warnings = [];
     const result = applyRouteCategory({
-      routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings,
+      routes,
+      allStopTimeRows,
+      tripToRoute,
+      stopsByStopId,
+      warnings,
     });
     expect(result.classifiedCount).toBe(0);
     expect(result.longNameCleanedCount).toBe(0);
@@ -743,9 +859,7 @@ describe('applyRouteCategory -- desc strategy + empty-desc fallback', () => {
     // original desc strategy leaves route_desc empty. The fallback
     // fires: labels = ["Transport Elevi"], filter "Normal" (not in
     // list) -> ["Transport Elevi"], join -> "Transport Elevi".
-    const routes = [
-      { route_id: '93', route_short_name: 'TE1', route_long_name: 'Manastur', route_desc: '' },
-    ];
+    const routes = [{ route_id: '93', route_short_name: 'TE1', route_long_name: 'Manastur', route_desc: '' }];
     const warnings = [];
     const result = applyRouteCategory({ routes, warnings });
     // School network, no tag.
@@ -759,9 +873,7 @@ describe('applyRouteCategory -- desc strategy + empty-desc fallback', () => {
     // The defensive "elevi" substring catch puts ELEVI-99 in the
     // school network. No tag, no cleaned desc, no parenthetical --
     // empty-desc fallback fires.
-    const routes = [
-      { route_id: 'E99', route_short_name: 'ELEVI-99', route_long_name: '', route_desc: '' },
-    ];
+    const routes = [{ route_id: 'E99', route_short_name: 'ELEVI-99', route_long_name: '', route_desc: '' }];
     const warnings = [];
     const result = applyRouteCategory({ routes, warnings });
     expect(result.routeNetworks.get('E99')).toEqual({ id: 'school', label: 'Transport Elevi' });
@@ -814,9 +926,7 @@ describe('applyRouteCategory -- desc strategy + empty-desc fallback', () => {
       { trip_id: 't-cs', stop_id: 'B', stop_sequence: 1 },
     ];
     const tripToRoute = new Map([['t-cs', '205']]);
-    const routes = [
-      { route_id: '205', route_short_name: 'CS', route_long_name: 'CURSA SPECIALA', route_desc: '' },
-    ];
+    const routes = [{ route_id: '205', route_short_name: 'CS', route_long_name: 'CURSA SPECIALA', route_desc: '' }];
     const warnings = [];
     const result = applyRouteCategory({ routes, allStopTimeRows, tripToRoute, stopsByStopId, warnings });
     // CS: special tag. route_desc = "Cursa Speciala" (tag, no prepend).

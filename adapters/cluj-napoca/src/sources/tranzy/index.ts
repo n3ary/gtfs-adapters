@@ -13,7 +13,7 @@
  * `./client.js` directly and feeding raw arrays into `./transform.js`.
  */
 
-export { TranzyClient, TranzyError, TranzyAuthError, TranzyRateLimitError } from './client.ts';
+export { TranzyAuthError, TranzyClient, TranzyError, TranzyRateLimitError } from './client.ts';
 export { transformTranzyData } from './transform.ts';
 
 import { TranzyClient } from './client.ts';

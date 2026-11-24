@@ -28,7 +28,7 @@ export async function loadTransitousSeed({ url = DEFAULT_SEED_URL, userAgent } =
   const seed = await loadSeed(url, { userAgent });
   console.log(
     `[transitous] seed loaded: ${seed.routes.length} routes, ` +
-    `${seed.stops.length} stops, ${seed.trips.length} trips`,
+      `${seed.stops.length} stops, ${seed.trips.length} trips`,
   );
   return { ...seed, source: url };
 }

@@ -19,21 +19,21 @@
  * owns the column names + row types. The local csv.js is deleted.
  */
 
-import { copyFileSync, mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, createWriteStream, mkdtempSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-import { parseRoutes, parseStops, parseTrips, parseStopTimesStream, parseShapesStream } from '@n3ary/gtfs-spec/spec';
+import { parseRoutes, parseShapesStream, parseStops, parseStopTimesStream, parseTrips } from '@n3ary/gtfs-spec/spec';
 import { assertNotWafBuffer } from '@n3ary/gtfs-spec/waf';
 
 const REQUIRED = ['agency.txt', 'routes.txt', 'stops.txt', 'trips.txt', 'stop_times.txt'];
 const OPTIONAL = ['shapes.txt', 'calendar.txt', 'calendar_dates.txt', 'feed_info.txt'];
 
-export const USER_AGENT = 'cluj-napoca-gtfs-adapter/0.3.3 (https://github.com/n3ary/gtfs-adapters/tree/main/adapters/cluj-napoca)';
+export const USER_AGENT =
+  'cluj-napoca-gtfs-adapter/0.3.3 (https://github.com/n3ary/gtfs-adapters/tree/main/adapters/cluj-napoca)';
 
 /**
  * @param {string} source  absolute file path OR http(s) URL
@@ -70,8 +70,11 @@ export async function loadSeed(source, opts = {}) {
   if (r.status !== 0) throw new Error(`unzip failed (status ${r.status})`);
 
   for (const f of REQUIRED) {
-    try { statSync(join(seedDir, f)); }
-    catch { throw new Error(`seed missing required file: ${f}`); }
+    try {
+      statSync(join(seedDir, f));
+    } catch {
+      throw new Error(`seed missing required file: ${f}`);
+    }
   }
 
   const agencyTxt = readFileSync(join(seedDir, 'agency.txt'), 'utf8');
@@ -160,7 +163,9 @@ export async function loadSeed(source, opts = {}) {
     serviceId: t.service_id,
   }));
 
-  console.log(`[seed] parsed: ${routes.length} routes, ${stops.length} stops, ${trips.length} trips, ${stopTimesCount} stop_times`);
+  console.log(
+    `[seed] parsed: ${routes.length} routes, ${stops.length} stops, ${trips.length} trips, ${stopTimesCount} stop_times`,
+  );
 
   return { seedDir, agencyTxt, routes, stops, trips, stopTimes, shapesById, optional: OPTIONAL };
 }
